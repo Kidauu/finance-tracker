@@ -30,6 +30,41 @@ export function AccountManager() {
   const [openingBalance, setOpeningBalance] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Account | null>(null)
+  const [reconcilingId, setReconcilingId] = useState<string | null>(null)
+  const [reconcileValue, setReconcileValue] = useState('')
+
+  function startReconcile(accountId: string, currentBalance: number) {
+    setReconcilingId(accountId)
+    setReconcileValue(String(Math.round(currentBalance)))
+  }
+
+  /**
+   * Reconciles to the real bank balance by shifting the opening balance by the
+   * difference, rather than inventing an adjustment transaction — the history
+   * of what was actually spent stays untouched.
+   */
+  async function saveReconcile(account: Account, currentBalance: number) {
+    const actual = Number(reconcileValue)
+    if (!Number.isFinite(actual)) {
+      showToast('Jumlah tidak valid', 'error')
+      return
+    }
+    const delta = actual - currentBalance
+    if (delta === 0) {
+      setReconcilingId(null)
+      return
+    }
+    try {
+      await updateAccount.mutateAsync({
+        id: account.id,
+        opening_balance: account.opening_balance + delta,
+      })
+      showToast(`Saldo ${account.name} disesuaikan`)
+      setReconcilingId(null)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Gagal menyesuaikan saldo', 'error')
+    }
+  }
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault()
@@ -84,6 +119,12 @@ export function AccountManager() {
                   <p className="text-xs text-white/40">{formatIDR(balance)}</p>
                 </div>
                 <button
+                  onClick={() => startReconcile(a.id, balance)}
+                  className="shrink-0 text-xs text-indigo-400 hover:text-indigo-300"
+                >
+                  Sesuaikan
+                </button>
+                <button
                   onClick={() => setPendingDelete(a)}
                   aria-label={`Hapus rekening ${a.name}`}
                   className="shrink-0 text-xs text-white/30 hover:text-red-400"
@@ -91,6 +132,37 @@ export function AccountManager() {
                   Hapus
                 </button>
               </div>
+
+              {reconcilingId === a.id && (
+                <div className="mt-3 rounded-lg bg-white/5 p-3">
+                  <Label htmlFor={`rec-${a.id}`}>Saldo asli di aplikasi bank</Label>
+                  <CurrencyInput
+                    id={`rec-${a.id}`}
+                    value={reconcileValue}
+                    onChange={setReconcileValue}
+                    autoFocus
+                  />
+                  <p className="mt-1.5 text-xs text-white/40">
+                    Selisihnya dicatat sebagai saldo awal, jadi riwayat transaksimu gak berubah.
+                  </p>
+                  <div className="mt-2.5 flex gap-2">
+                    <Button
+                      variant="secondary"
+                      onClick={() => setReconcilingId(null)}
+                      className="flex-1 !py-1.5 text-xs"
+                    >
+                      Batal
+                    </Button>
+                    <Button
+                      onClick={() => saveReconcile(a, balance)}
+                      disabled={updateAccount.isPending}
+                      className="flex-1 !py-1.5 text-xs"
+                    >
+                      Simpan
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               <div className="mt-2.5 flex items-center gap-2">
                 <Select
