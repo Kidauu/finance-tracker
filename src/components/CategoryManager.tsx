@@ -3,7 +3,7 @@ import { useAddCategory, useCategories, useDeleteCategory } from '../hooks/useCa
 import { Button } from './ui/Button'
 import { Input, Label } from './ui/Input'
 import { SWATCHES } from '../lib/colorSwatches'
-import type { TransactionType } from '../types'
+import type { CategoryType } from '../types'
 
 export function CategoryManager() {
   const { data: categories } = useCategories()
@@ -11,7 +11,7 @@ export function CategoryManager() {
   const deleteCategory = useDeleteCategory()
 
   const [name, setName] = useState('')
-  const [type, setType] = useState<TransactionType>('expense')
+  const [type, setType] = useState<CategoryType>('expense')
   const [color, setColor] = useState(SWATCHES[0])
   const [error, setError] = useState<string | null>(null)
 

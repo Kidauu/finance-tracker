@@ -12,8 +12,9 @@ type Filter = 'all' | TransactionType
 
 const FILTER_LABELS: Record<Filter, string> = {
   all: 'Semua',
-  income: 'Pemasukan',
-  expense: 'Pengeluaran',
+  expense: 'Keluar',
+  income: 'Masuk',
+  transfer: 'Transfer',
 }
 
 export default function Transactions() {
@@ -61,7 +62,7 @@ export default function Transactions() {
 
       <div className="flex items-center justify-between gap-2">
         <div className="inline-flex rounded-xl bg-white/5 p-1">
-          {(['all', 'expense', 'income'] as const).map((f) => (
+          {(['all', 'expense', 'income', 'transfer'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}

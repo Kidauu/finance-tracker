@@ -4,6 +4,9 @@ import { useTransactions } from '../hooks/useTransactions'
 import { useSeedDefaultCategories } from '../hooks/useCategories'
 import { usePaydayHistory, type PaydayMonth } from '../hooks/usePaydayHistory'
 import { usePayPeriods } from '../hooks/usePayPeriods'
+import { useAccountBalances } from '../hooks/useAccounts'
+import { AccountBalances } from '../components/AccountBalances'
+import { AccountManager } from '../components/AccountManager'
 import { SummaryCards } from '../components/SummaryCards'
 import { CategoryChart, type CategorySlice } from '../components/CategoryChart'
 import { TransactionList } from '../components/TransactionList'
@@ -19,6 +22,7 @@ import type { TransactionType, TransactionWithCategory } from '../types'
 interface Prefill {
   type: TransactionType
   categoryId?: string
+  accountId?: string
   date?: string
   note?: string
 }
@@ -31,12 +35,14 @@ export default function Dashboard() {
   const range = period === 'cycle' ? { from: cycle.start, to: cycle.end } : undefined
   const { data: transactions, isLoading, isError } = useTransactions(range)
   const { months, gajiCategory, unrecordedPastCount } = usePaydayHistory()
+  const { balances, totalBalance } = useAccountBalances()
 
   const [formOpen, setFormOpen] = useState(false)
   const [holidaysOpen, setHolidaysOpen] = useState(false)
+  const [accountsOpen, setAccountsOpen] = useState(false)
   const [editing, setEditing] = useState<TransactionWithCategory | undefined>(undefined)
   const [prefill, setPrefill] = useState<Prefill | undefined>(undefined)
-  const [breakdownType, setBreakdownType] = useState<TransactionType>('expense')
+  const [breakdownType, setBreakdownType] = useState<'income' | 'expense'>('expense')
 
   const { totalIncome, totalExpense, expenseSlices, incomeSlices } = useMemo(() => {
     const list = transactions ?? []
@@ -46,6 +52,10 @@ export default function Dashboard() {
     const incomeByCategory = new Map<string, CategorySlice>()
 
     for (const t of list) {
+      // transfers just move money between the user's own accounts — counting
+      // them here would inflate both income and expense
+      if (t.type === 'transfer') continue
+
       const key = t.category?.name ?? 'Tanpa kategori'
       const map = t.type === 'income' ? incomeByCategory : expenseByCategory
       const existing = map.get(key)
@@ -78,13 +88,21 @@ export default function Dashboard() {
     setFormOpen(true)
   }
 
+  function openTransfer() {
+    setEditing(undefined)
+    setPrefill({ type: 'transfer' })
+    setFormOpen(true)
+  }
+
   function openPaydayRecord(month: PaydayMonth) {
+    const payrollAccount = balances.find((b) => b.account.is_payroll)?.account
     setEditing(undefined)
     setPrefill({
       type: 'income',
       categoryId: gajiCategory?.id,
+      accountId: payrollAccount?.id,
       date: month.payday,
-      note: `Mencatat gaji ${month.label}`,
+      note: `Mencatat gaji ${month.label}${payrollAccount ? ` — masuk ke ${payrollAccount.name}` : ''}`,
     })
     setFormOpen(true)
   }
@@ -123,6 +141,13 @@ export default function Dashboard() {
           sehari sebelum gajian berikutnya
         </p>
       )}
+
+      <AccountBalances
+        balances={balances}
+        totalBalance={totalBalance}
+        onManage={() => setAccountsOpen(true)}
+        onTransfer={openTransfer}
+      />
 
       <PaydayPanel
         months={months}
@@ -177,7 +202,7 @@ export default function Dashboard() {
         title={editing ? 'Ubah transaksi' : 'Tambah transaksi'}
       >
         <TransactionForm
-          key={editing?.id ?? prefill?.date ?? 'new'}
+          key={editing?.id ?? `${prefill?.type ?? ''}-${prefill?.date ?? 'new'}`}
           transaction={editing}
           prefill={prefill}
           onSaved={() => setFormOpen(false)}
@@ -187,6 +212,10 @@ export default function Dashboard() {
 
       <Modal open={holidaysOpen} onClose={() => setHolidaysOpen(false)} title="Hari libur">
         <HolidayManager />
+      </Modal>
+
+      <Modal open={accountsOpen} onClose={() => setAccountsOpen(false)} title="Rekening">
+        <AccountManager />
       </Modal>
     </div>
   )

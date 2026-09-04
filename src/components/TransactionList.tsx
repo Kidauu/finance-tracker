@@ -61,10 +61,12 @@ export function TransactionList({ transactions, onEdit }: TransactionListProps) 
     <>
       <div className="flex flex-col gap-5">
         {groupByDate(transactions).map(([date, items]) => {
-          const dayTotal = items.reduce(
-            (sum, t) => sum + (t.type === 'income' ? t.amount : -t.amount),
-            0,
-          )
+          // transfers net to zero across your own accounts, so they're left out
+          const dayTotal = items.reduce((sum, t) => {
+            if (t.type === 'income') return sum + t.amount
+            if (t.type === 'expense') return sum - t.amount
+            return sum
+          }, 0)
           return (
             <div key={date}>
               <div className="mb-2 flex items-baseline justify-between">
@@ -88,25 +90,40 @@ export function TransactionList({ transactions, onEdit }: TransactionListProps) 
                   >
                     <span
                       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm"
-                      style={{ backgroundColor: (t.category?.color ?? '#6366f1') + '33' }}
+                      style={{
+                        backgroundColor:
+                          (t.type === 'transfer'
+                            ? (t.account?.color ?? '#6366f1')
+                            : (t.category?.color ?? '#6366f1')) + '33',
+                      }}
                     >
-                      {t.type === 'income' ? '↑' : '↓'}
+                      {t.type === 'income' ? '↑' : t.type === 'expense' ? '↓' : '⇄'}
                     </span>
                     <button className="min-w-0 flex-1 text-left" onClick={() => onEdit(t)}>
                       <p className="truncate text-sm font-medium text-white">
-                        {t.category?.name ?? 'Tanpa kategori'}
+                        {t.type === 'transfer'
+                          ? `${t.account?.name ?? '?'} → ${t.to_account?.name ?? '?'}`
+                          : (t.category?.name ?? 'Tanpa kategori')}
                       </p>
-                      {t.description && (
-                        <p className="truncate text-xs text-white/40">{t.description}</p>
-                      )}
+                      <p className="truncate text-xs text-white/40">
+                        {t.type !== 'transfer' && t.account && (
+                          <span className="text-white/50">{t.account.name}</span>
+                        )}
+                        {t.type !== 'transfer' && t.account && t.description && ' · '}
+                        {t.description}
+                      </p>
                     </button>
                     <div className="flex shrink-0 items-center gap-2">
                       <span
                         className={`text-sm font-semibold tabular-nums ${
-                          t.type === 'income' ? 'text-emerald-400' : 'text-white/80'
+                          t.type === 'income'
+                            ? 'text-emerald-400'
+                            : t.type === 'transfer'
+                              ? 'text-sky-400'
+                              : 'text-white/80'
                         }`}
                       >
-                        {t.type === 'income' ? '+' : '−'}
+                        {t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '−'}
                         {formatIDR(t.amount)}
                       </span>
                       <button
@@ -130,7 +147,11 @@ export function TransactionList({ transactions, onEdit }: TransactionListProps) 
         title="Hapus transaksi?"
         message={
           pendingDelete
-            ? `${pendingDelete.category?.name ?? 'Tanpa kategori'} — ${formatIDR(pendingDelete.amount)} pada ${formatDateShort(pendingDelete.transaction_date)}. Tindakan ini gak bisa dibatalkan.`
+            ? `${
+                pendingDelete.type === 'transfer'
+                  ? `Transfer ${pendingDelete.account?.name ?? '?'} → ${pendingDelete.to_account?.name ?? '?'}`
+                  : (pendingDelete.category?.name ?? 'Tanpa kategori')
+              } — ${formatIDR(pendingDelete.amount)} pada ${formatDateShort(pendingDelete.transaction_date)}. Tindakan ini gak bisa dibatalkan.`
             : ''
         }
         busy={deleteTransaction.isPending}

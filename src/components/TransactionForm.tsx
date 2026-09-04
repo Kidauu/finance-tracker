@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useCategories } from '../hooks/useCategories'
+import { useAccounts } from '../hooks/useAccounts'
 import { useAddTransaction, useUpdateTransaction } from '../hooks/useTransactions'
 import { useToast } from '../hooks/useToast'
 import { Button } from './ui/Button'
@@ -11,6 +12,7 @@ import type { TransactionType, TransactionWithCategory } from '../types'
 interface TransactionFormPrefill {
   type?: TransactionType
   categoryId?: string
+  accountId?: string
   date?: string
   /** shown above the form when the context isn't obvious, e.g. backfilling a past payday */
   note?: string
@@ -23,6 +25,12 @@ interface TransactionFormProps {
   onCancel: () => void
 }
 
+const TYPE_LABELS: Record<TransactionType, string> = {
+  expense: 'Keluar',
+  income: 'Masuk',
+  transfer: 'Transfer',
+}
+
 function yesterdayISO(): string {
   const d = new Date()
   d.setDate(d.getDate() - 1)
@@ -31,28 +39,47 @@ function yesterdayISO(): string {
 
 export function TransactionForm({ transaction, prefill, onSaved, onCancel }: TransactionFormProps) {
   const { data: categories } = useCategories()
+  const { data: accounts } = useAccounts()
   const addTransaction = useAddTransaction()
   const updateTransaction = useUpdateTransaction()
   const { showToast } = useToast()
 
+  const defaultAccountId =
+    transaction?.account_id ??
+    prefill?.accountId ??
+    (accounts ?? []).find((a) => !a.is_payroll)?.id ??
+    (accounts ?? [])[0]?.id ??
+    ''
+
   const [type, setType] = useState<TransactionType>(transaction?.type ?? prefill?.type ?? 'expense')
-  const [amount, setAmount] = useState(
-    transaction ? String(Math.round(transaction.amount)) : '',
-  )
+  const [amount, setAmount] = useState(transaction ? String(Math.round(transaction.amount)) : '')
   const [categoryId, setCategoryId] = useState(transaction?.category_id ?? prefill?.categoryId ?? '')
+  const [accountId, setAccountId] = useState(defaultAccountId)
+  const [toAccountId, setToAccountId] = useState(transaction?.to_account_id ?? '')
   const [date, setDate] = useState(transaction?.transaction_date ?? prefill?.date ?? todayISO())
   const [description, setDescription] = useState(transaction?.description ?? '')
   const [error, setError] = useState<string | null>(null)
 
+  const isTransfer = type === 'transfer'
   const filteredCategories = (categories ?? []).filter((c) => c.type === type)
   const isSaving = addTransaction.isPending || updateTransaction.isPending
 
   const today = todayISO()
-  const yesterday = yesterdayISO()
   const dateShortcuts = [
     { label: 'Hari ini', value: today },
-    { label: 'Kemarin', value: yesterday },
+    { label: 'Kemarin', value: yesterdayISO() },
   ]
+
+  function handleTypeChange(next: TransactionType) {
+    setType(next)
+    setCategoryId('')
+    if (next !== 'transfer') setToAccountId('')
+    else if (accounts && accounts.length > 1) {
+      // preselect a destination that isn't the source
+      const other = accounts.find((a) => a.id !== accountId)
+      if (other) setToAccountId(other.id)
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -67,12 +94,24 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
       setError('Tanggal wajib diisi')
       return
     }
+    if (isTransfer) {
+      if (!accountId || !toAccountId) {
+        setError('Pilih rekening asal dan tujuan')
+        return
+      }
+      if (accountId === toAccountId) {
+        setError('Rekening asal dan tujuan harus berbeda')
+        return
+      }
+    }
 
     try {
       const payload = {
         type,
         amount: numericAmount,
-        category_id: categoryId || null,
+        category_id: isTransfer ? null : categoryId || null,
+        account_id: accountId || null,
+        to_account_id: isTransfer ? toAccountId : null,
         transaction_date: date,
         description: description || null,
       }
@@ -82,7 +121,13 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
         showToast('Transaksi diperbarui')
       } else {
         await addTransaction.mutateAsync(payload)
-        showToast(type === 'income' ? 'Pemasukan dicatat' : 'Pengeluaran dicatat')
+        showToast(
+          isTransfer
+            ? 'Transfer dicatat'
+            : type === 'income'
+              ? 'Pemasukan dicatat'
+              : 'Pengeluaran dicatat',
+        )
       }
       onSaved()
     } catch (err) {
@@ -98,20 +143,17 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-2">
-        {(['expense', 'income'] as const).map((t) => (
+      <div className="grid grid-cols-3 gap-2">
+        {(['expense', 'income', 'transfer'] as const).map((t) => (
           <button
             key={t}
             type="button"
-            onClick={() => {
-              setType(t)
-              setCategoryId('')
-            }}
+            onClick={() => handleTypeChange(t)}
             className={`rounded-xl py-2.5 text-sm font-medium transition-colors ${
               type === t ? 'bg-indigo-600 text-white' : 'bg-white/5 text-white/50'
             }`}
           >
-            {t === 'expense' ? 'Pengeluaran' : 'Pemasukan'}
+            {TYPE_LABELS[t]}
           </button>
         ))}
       </div>
@@ -122,16 +164,54 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
       </div>
 
       <div>
-        <Label htmlFor="category">Kategori</Label>
-        <Select id="category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-          <option value="">Tanpa kategori</option>
-          {filteredCategories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
+        <Label htmlFor="account">{isTransfer ? 'Dari rekening' : 'Rekening'}</Label>
+        <Select id="account" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+          {!isTransfer && <option value="">Tanpa rekening</option>}
+          {(accounts ?? []).map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
             </option>
           ))}
         </Select>
       </div>
+
+      {isTransfer && (
+        <div>
+          <Label htmlFor="to-account">Ke rekening</Label>
+          <Select
+            id="to-account"
+            value={toAccountId}
+            onChange={(e) => setToAccountId(e.target.value)}
+          >
+            <option value="">Pilih rekening tujuan</option>
+            {(accounts ?? [])
+              .filter((a) => a.id !== accountId)
+              .map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+          </Select>
+          <p className="mt-1.5 text-xs text-white/40">
+            Transfer cuma mindahin saldo antar rekening — gak dihitung sebagai pemasukan atau
+            pengeluaran.
+          </p>
+        </div>
+      )}
+
+      {!isTransfer && (
+        <div>
+          <Label htmlFor="category">Kategori</Label>
+          <Select id="category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="">Tanpa kategori</option>
+            {filteredCategories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
 
       <div>
         <div className="mb-1.5 flex items-baseline justify-between">

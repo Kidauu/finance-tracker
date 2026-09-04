@@ -14,6 +14,13 @@ export interface MonthlyTotal {
   expense: number
 }
 
+export interface AccountTotal {
+  name: string
+  balance: number
+  color: string
+  kind: string
+}
+
 export interface ExcelExportInput {
   periodLabel: string
   from: string
@@ -23,6 +30,7 @@ export interface ExcelExportInput {
   expenseByCategory: CategoryTotal[]
   incomeByCategory: CategoryTotal[]
   monthly: MonthlyTotal[]
+  accounts: AccountTotal[]
   transactions: TransactionWithCategory[]
 }
 
@@ -34,6 +42,7 @@ const EXPENSE_FILL = 'FFFEE2E2'
 const EXPENSE_TEXT = 'FF991B1B'
 const NET_FILL = 'FFE0E7FF'
 const NET_TEXT = 'FF3730A3'
+const TRANSFER_TEXT = 'FF0369A1'
 const TABLE_HEADER_FILL = 'FFF3F4F6'
 const BAND_FILL = 'FFF9FAFB'
 const BORDER_COLOR = 'FFE5E7EB'
@@ -179,6 +188,66 @@ function addCategoryTable(
   return row + 1 // blank spacer row
 }
 
+function addAccountTable(
+  sheet: ExcelJS.Worksheet,
+  startRow: number,
+  accounts: AccountTotal[],
+): number {
+  if (accounts.length === 0) return startRow
+
+  let row = startRow
+  const titleCell = sheet.getCell(row, 1)
+  sheet.mergeCells(row, 1, row, 4)
+  titleCell.value = 'Saldo per Rekening'
+  titleCell.font = { bold: true, size: 12, color: { argb: 'FF111827' } }
+  row += 1
+
+  const headerRow = row
+  ;['', 'Rekening', 'Jenis', 'Saldo'].forEach((h, i) => {
+    const cell = sheet.getCell(headerRow, i + 1)
+    cell.value = h
+    cell.font = { bold: true, size: 10, color: { argb: 'FF374151' } }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TABLE_HEADER_FILL } }
+    cell.border = thinBorder()
+  })
+  row += 1
+
+  let total = 0
+  for (const a of accounts) {
+    total += a.balance
+    const swatch = sheet.getCell(row, 1)
+    const nameCell = sheet.getCell(row, 2)
+    const kindCell = sheet.getCell(row, 3)
+    const balanceCell = sheet.getCell(row, 4)
+
+    swatch.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: toARGB(a.color) } }
+    nameCell.value = a.name
+    kindCell.value = a.kind
+    balanceCell.value = a.balance
+    balanceCell.numFmt = IDR_FMT
+    balanceCell.font = { bold: true, color: { argb: a.balance >= 0 ? NET_TEXT : EXPENSE_TEXT } }
+
+    for (const cell of [swatch, nameCell, kindCell, balanceCell]) {
+      cell.border = thinBorder()
+    }
+    row += 1
+  }
+
+  const totalLabel = sheet.getCell(row, 2)
+  const totalValue = sheet.getCell(row, 4)
+  totalLabel.value = 'Total'
+  totalLabel.font = { bold: true }
+  totalValue.value = total
+  totalValue.numFmt = IDR_FMT
+  totalValue.font = { bold: true }
+  for (let c = 1; c <= 4; c++) {
+    sheet.getCell(row, c).border = { top: { style: 'thin', color: { argb: 'FF9CA3AF' } } }
+  }
+  row += 1
+
+  return row + 1
+}
+
 function addMonthlyTable(sheet: ExcelJS.Worksheet, startRow: number, monthly: MonthlyTotal[]): number {
   let row = startRow
 
@@ -264,6 +333,7 @@ export async function exportReportToExcel(input: ExcelExportInput): Promise<void
   addSummaryRow(dash, 6, 'Saldo Bersih', input.totalIncome - input.totalExpense, NET_FILL, NET_TEXT)
 
   let row = 8
+  row = addAccountTable(dash, row, input.accounts)
   row = addCategoryTable(dash, row, 'Rincian Pengeluaran per Kategori', input.expenseByCategory, input.totalExpense)
   row = addCategoryTable(dash, row, 'Rincian Pemasukan per Kategori', input.incomeByCategory, input.totalIncome)
   addMonthlyTable(dash, row, input.monthly)
@@ -275,11 +345,12 @@ export async function exportReportToExcel(input: ExcelExportInput): Promise<void
     { width: 14 },
     { width: 12 },
     { width: 24 },
+    { width: 22 },
     { width: 18 },
     { width: 34 },
   ]
 
-  const txHeader = ['Tanggal', 'Tipe', 'Kategori', 'Jumlah', 'Catatan']
+  const txHeader = ['Tanggal', 'Tipe', 'Kategori', 'Rekening', 'Jumlah', 'Catatan']
   txHeader.forEach((h, i) => {
     const cell = txSheet.getCell(1, i + 1)
     cell.value = h
@@ -298,19 +369,29 @@ export async function exportReportToExcel(input: ExcelExportInput): Promise<void
     const dateCell = txSheet.getCell(r, 1)
     const typeCell = txSheet.getCell(r, 2)
     const catCell = txSheet.getCell(r, 3)
-    const amountCell = txSheet.getCell(r, 4)
-    const noteCell = txSheet.getCell(r, 5)
+    const accountCell = txSheet.getCell(r, 4)
+    const amountCell = txSheet.getCell(r, 5)
+    const noteCell = txSheet.getCell(r, 6)
+
+    const isTransfer = t.type === 'transfer'
 
     dateCell.value = formatDateShort(t.transaction_date)
-    typeCell.value = t.type === 'income' ? 'Pemasukan' : 'Pengeluaran'
-    typeCell.font = { color: { argb: t.type === 'income' ? INCOME_TEXT : EXPENSE_TEXT } }
-    catCell.value = t.category?.name ?? 'Tanpa kategori'
+    typeCell.value = isTransfer ? 'Transfer' : t.type === 'income' ? 'Pemasukan' : 'Pengeluaran'
+    typeCell.font = {
+      color: {
+        argb: isTransfer ? TRANSFER_TEXT : t.type === 'income' ? INCOME_TEXT : EXPENSE_TEXT,
+      },
+    }
+    catCell.value = isTransfer ? '—' : (t.category?.name ?? 'Tanpa kategori')
+    accountCell.value = isTransfer
+      ? `${t.account?.name ?? '?'} → ${t.to_account?.name ?? '?'}`
+      : (t.account?.name ?? 'Tanpa rekening')
     amountCell.value = t.amount
     amountCell.numFmt = IDR_FMT
     noteCell.value = t.description ?? ''
 
     const bandFill = idx % 2 === 1 ? BAND_FILL : 'FFFFFFFF'
-    for (const cell of [dateCell, typeCell, catCell, amountCell, noteCell]) {
+    for (const cell of [dateCell, typeCell, catCell, accountCell, amountCell, noteCell]) {
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bandFill } }
       cell.border = { bottom: { style: 'thin', color: { argb: BORDER_COLOR } } }
     }

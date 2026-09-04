@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useTransactions } from '../hooks/useTransactions'
 import { usePayPeriods } from '../hooks/usePayPeriods'
+import { useAccountBalances } from '../hooks/useAccounts'
 import { CategoryChart, type CategorySlice } from '../components/CategoryChart'
 import { MonthlyTrendChart, type MonthlyPoint } from '../components/MonthlyTrendChart'
 import { SummaryCards } from '../components/SummaryCards'
@@ -10,7 +11,6 @@ import { LoadingBlock, ErrorBanner } from '../components/ui/Feedback'
 import { useToast } from '../hooks/useToast'
 import { findPeriodFor } from '../lib/payPeriod'
 import { formatDateShort } from '../lib/format'
-import type { TransactionType } from '../types'
 
 /** Report spans, counted in payroll cycles rather than calendar months. */
 const PRESETS = [
@@ -39,9 +39,10 @@ export default function Reports() {
         ? presetSpan!.periods[0].label
         : `${presetCount} Periode Gaji`
 
-  const [breakdownType, setBreakdownType] = useState<TransactionType>('expense')
+  const [breakdownType, setBreakdownType] = useState<'income' | 'expense'>('expense')
   const [exporting, setExporting] = useState(false)
   const { showToast } = useToast()
+  const { balances } = useAccountBalances()
 
   const { data: transactions, isLoading, isError } = useTransactions({ from, to })
 
@@ -60,6 +61,9 @@ export default function Reports() {
     }
 
     for (const t of list) {
+      // transfers only shuffle money between the user's own accounts
+      if (t.type === 'transfer') continue
+
       if (t.type === 'income') income += t.amount
       else expense += t.amount
 
@@ -113,6 +117,12 @@ export default function Reports() {
           month: p.month,
           income: p.income,
           expense: p.expense,
+        })),
+        accounts: balances.map((b) => ({
+          name: b.account.name,
+          balance: b.balance,
+          color: b.account.color,
+          kind: b.account.kind === 'savings' ? 'Simpanan / darurat' : 'Pengeluaran harian',
         })),
         transactions,
       })

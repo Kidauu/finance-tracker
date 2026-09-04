@@ -13,7 +13,9 @@ export function useTransactions(range?: DateRange) {
     queryFn: async (): Promise<TransactionWithCategory[]> => {
       let query = supabase
         .from('transactions')
-        .select('*, category:categories(*)')
+        .select(
+          '*, category:categories(*), account:accounts!transactions_account_id_fkey(*), to_account:accounts!transactions_to_account_id_fkey(*)',
+        )
         .order('transaction_date', { ascending: false })
         .order('created_at', { ascending: false })
 
