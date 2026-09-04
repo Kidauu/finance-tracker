@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { ArrowDownUp, Search, Tags } from 'lucide-react'
 import { useTransactions } from '../hooks/useTransactions'
+import { useRegisterAddAction } from '../hooks/useAddAction'
 import { TransactionList } from '../components/TransactionList'
 import { TransactionForm } from '../components/TransactionForm'
 import { CategoryManager } from '../components/CategoryManager'
 import { Modal } from '../components/ui/Modal'
-import { Button } from '../components/ui/Button'
+import { IconInput } from '../components/ui/Input'
 import { LoadingBlock, ErrorBanner } from '../components/ui/Feedback'
+import { formatIDR } from '../lib/format'
 import type { TransactionType, TransactionWithCategory } from '../types'
 
 type Filter = 'all' | TransactionType
@@ -21,6 +24,7 @@ export default function Transactions() {
   const { data: transactions, isLoading, isError } = useTransactions()
   const [sortAsc, setSortAsc] = useState(false)
   const [filter, setFilter] = useState<Filter>('all')
+  const [query, setQuery] = useState('')
 
   const [formOpen, setFormOpen] = useState(false)
   const [categoriesOpen, setCategoriesOpen] = useState(false)
@@ -29,13 +33,29 @@ export default function Transactions() {
   const visible = useMemo(() => {
     let list = transactions ?? []
     if (filter !== 'all') list = list.filter((t) => t.type === filter)
-    return sortAsc ? [...list].reverse() : list
-  }, [transactions, sortAsc, filter])
 
-  function openAdd() {
+    const q = query.trim().toLowerCase()
+    if (q) {
+      list = list.filter((t) =>
+        [t.description, t.category?.name, t.account?.name, t.to_account?.name]
+          .filter(Boolean)
+          .some((field) => field!.toLowerCase().includes(q)),
+      )
+    }
+    return sortAsc ? [...list].reverse() : list
+  }, [transactions, sortAsc, filter, query])
+
+  const spentThisList = useMemo(
+    () => visible.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0),
+    [visible],
+  )
+
+  const openAdd = useCallback(() => {
     setEditing(undefined)
     setFormOpen(true)
-  }
+  }, [])
+
+  useRegisterAddAction(openAdd)
 
   function openEdit(t: TransactionWithCategory) {
     setEditing(t)
@@ -44,41 +64,51 @@ export default function Transactions() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">Transaksi</h2>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => setCategoriesOpen(true)}
-            className="!px-3 !py-2 text-xs"
-          >
-            Kategori
-          </Button>
-          <Button onClick={openAdd} className="!px-3 !py-2 text-xs">
-            + Tambah
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <div className="inline-flex rounded-xl bg-white/5 p-1">
-          {(['all', 'expense', 'income', 'transfer'] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
-                filter === f ? 'bg-indigo-600 text-white' : 'text-white/50'
-              }`}
-            >
-              {FILTER_LABELS[f]}
-            </button>
-          ))}
+      <header className="flex items-start justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-[22px] font-extrabold tracking-tight text-content">Transaksi</h1>
+          <p className="text-[13px] text-muted">
+            {visible.length} catatan · keluar {formatIDR(spentThisList)}
+          </p>
         </div>
         <button
-          onClick={() => setSortAsc((v) => !v)}
-          className="shrink-0 text-xs text-white/40 hover:text-white/70"
+          onClick={() => setCategoriesOpen(true)}
+          aria-label="Kelola kategori"
+          className="flex h-[38px] w-[38px] items-center justify-center rounded-[13px] border border-line-input bg-surface text-label"
         >
-          {sortAsc ? 'Terlama' : 'Terbaru'} ↕
+          <Tags size={16} />
+        </button>
+      </header>
+
+      <IconInput
+        icon={<Search size={16} />}
+        placeholder="Cari catatan, kategori, rekening…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        className="!h-[46px] !rounded-2xl !text-sm"
+      />
+
+      <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+        {(['all', 'expense', 'income', 'transfer'] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`shrink-0 rounded-full px-3.5 py-2 text-xs font-bold transition-colors ${
+              filter === f
+                ? 'bg-ink text-on-ink'
+                : 'border border-line-input bg-surface font-semibold text-label'
+            }`}
+          >
+            {FILTER_LABELS[f]}
+          </button>
+        ))}
+        <button
+          onClick={() => setSortAsc((v) => !v)}
+          aria-label="Ubah urutan"
+          className="ml-auto flex shrink-0 items-center gap-1 rounded-full border border-line-input bg-surface px-3 py-2 text-xs font-semibold text-label"
+        >
+          <ArrowDownUp size={13} />
+          {sortAsc ? 'Terlama' : 'Terbaru'}
         </button>
       </div>
 
@@ -90,7 +120,7 @@ export default function Transactions() {
       <Modal
         open={formOpen}
         onClose={() => setFormOpen(false)}
-        title={editing ? 'Ubah transaksi' : 'Tambah transaksi'}
+        title={editing ? 'Ubah transaksi' : 'Catat transaksi'}
       >
         <TransactionForm
           key={editing?.id ?? 'new'}

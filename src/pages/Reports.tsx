@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { Download } from 'lucide-react'
 import { useTransactions } from '../hooks/useTransactions'
 import { usePayPeriods } from '../hooks/usePayPeriods'
 import { useAccountBalances } from '../hooks/useAccounts'
+import { useRegisterAddAction } from '../hooks/useAddAction'
 import { CategoryChart, type CategorySlice } from '../components/CategoryChart'
 import { MonthlyTrendChart, type MonthlyPoint } from '../components/MonthlyTrendChart'
 import { SummaryCards } from '../components/SummaryCards'
-import { Button } from '../components/ui/Button'
+import { TransactionForm } from '../components/TransactionForm'
+import { Modal } from '../components/ui/Modal'
 import { Input, Label } from '../components/ui/Input'
 import { LoadingBlock, ErrorBanner } from '../components/ui/Feedback'
 import { useToast } from '../hooks/useToast'
@@ -41,8 +44,12 @@ export default function Reports() {
 
   const [breakdownType, setBreakdownType] = useState<'income' | 'expense'>('expense')
   const [exporting, setExporting] = useState(false)
+  const [formOpen, setFormOpen] = useState(false)
   const { showToast } = useToast()
   const { balances } = useAccountBalances()
+
+  const openAdd = useCallback(() => setFormOpen(true), [])
+  useRegisterAddAction(openAdd)
 
   const { data: transactions, isLoading, isError } = useTransactions({ from, to })
 
@@ -82,7 +89,7 @@ export default function Reports() {
       const map = t.type === 'income' ? incomeMap : expenseMap
       const existing = map.get(key)
       if (existing) existing.value += t.amount
-      else map.set(key, { name: key, value: t.amount, color: t.category?.color ?? '#64748b' })
+      else map.set(key, { name: key, value: t.amount, color: t.category?.color ?? '#8a8a80' })
     }
 
     return {
@@ -135,43 +142,48 @@ export default function Reports() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">Laporan</h2>
-        <Button
+    <div className="flex flex-col gap-4">
+      <header className="flex items-start justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-[22px] font-extrabold tracking-tight text-content">Laporan</h1>
+          <p className="text-[13px] text-muted">
+            {formatDateShort(from)} – {formatDateShort(to)}
+          </p>
+        </div>
+        <button
           onClick={handleExport}
           disabled={exporting || isLoading || !transactions}
-          className="!px-3 !py-2 text-xs"
+          className="flex items-center gap-1.5 rounded-[14px] border border-line-input bg-surface px-3.5 py-2.5 text-xs font-bold text-label disabled:opacity-50"
         >
-          {exporting ? 'Mengekspor…' : '⬇ Export Excel'}
-        </Button>
-      </div>
+          <Download size={14} />
+          {exporting ? 'Ekspor…' : 'Excel'}
+        </button>
+      </header>
 
-      <div>
-        <div className="flex flex-wrap gap-2">
-          {PRESETS.map((p) => (
-            <button
-              key={p.key}
-              onClick={() => setPresetCount(p.key)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                presetCount === p.key ? 'bg-indigo-600 text-white' : 'bg-white/5 text-white/50'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
+      <div className="flex flex-wrap gap-2">
+        {PRESETS.map((p) => (
           <button
-            onClick={() => setPresetCount('custom')}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-              presetCount === 'custom' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-white/50'
+            key={p.key}
+            onClick={() => setPresetCount(p.key)}
+            className={`rounded-full px-3.5 py-2 text-xs transition-colors ${
+              presetCount === p.key
+                ? 'bg-ink font-bold text-on-ink'
+                : 'border border-line-input bg-surface font-semibold text-label'
             }`}
           >
-            Custom
+            {p.label}
           </button>
-        </div>
-        <p className="mt-2 text-xs text-white/40">
-          {formatDateShort(from)} – {formatDateShort(to)}
-        </p>
+        ))}
+        <button
+          onClick={() => setPresetCount('custom')}
+          className={`rounded-full px-3.5 py-2 text-xs transition-colors ${
+            presetCount === 'custom'
+              ? 'bg-ink font-bold text-on-ink'
+              : 'border border-line-input bg-surface font-semibold text-label'
+          }`}
+        >
+          Custom
+        </button>
       </div>
 
       {presetCount === 'custom' && (
@@ -202,26 +214,27 @@ export default function Reports() {
 
       {!isLoading && !isError && (
         <>
-          <SummaryCards totalIncome={totalIncome} totalExpense={totalExpense} />
+          <SummaryCards
+            totalIncome={totalIncome}
+            totalExpense={totalExpense}
+            title="Selisih periode"
+          />
 
-          <section>
-            <h3 className="mb-3 text-sm font-semibold text-white/70">Tren per periode gaji</h3>
-            <MonthlyTrendChart data={monthlyPoints} />
-          </section>
+          <MonthlyTrendChart data={monthlyPoints} />
 
-          <section>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-white/70">Rincian per kategori</h3>
-              <div className="inline-flex rounded-xl bg-white/5 p-1">
+          <section className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[13px] font-extrabold text-content">Rincian per kategori</h2>
+              <div className="flex gap-1 rounded-xl bg-surface-alt p-1">
                 {(['expense', 'income'] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => setBreakdownType(t)}
-                    className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
-                      breakdownType === t ? 'bg-indigo-600 text-white' : 'text-white/50'
+                    className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                      breakdownType === t ? 'bg-surface text-content' : 'text-muted'
                     }`}
                   >
-                    {t === 'expense' ? 'Pengeluaran' : 'Pemasukan'}
+                    {t === 'expense' ? 'Keluar' : 'Masuk'}
                   </button>
                 ))}
               </div>
@@ -230,6 +243,13 @@ export default function Reports() {
           </section>
         </>
       )}
+
+      <Modal open={formOpen} onClose={() => setFormOpen(false)} title="Catat transaksi">
+        <TransactionForm
+          onSaved={() => setFormOpen(false)}
+          onCancel={() => setFormOpen(false)}
+        />
+      </Modal>
     </div>
   )
 }

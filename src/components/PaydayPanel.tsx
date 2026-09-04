@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { formatDateShort, formatIDR } from '../lib/format'
+import { CalendarDays, Check, ChevronRight, Plus } from 'lucide-react'
+import { formatDateShort, formatIDR, todayISO } from '../lib/format'
 import type { PaydayMonth } from '../hooks/usePaydayHistory'
 
 interface PaydayPanelProps {
@@ -8,6 +9,24 @@ interface PaydayPanelProps {
   onRecord: (month: PaydayMonth) => void
   onEdit: (month: PaydayMonth) => void
   onManageHolidays: () => void
+}
+
+function daysUntil(iso: string): number {
+  const today = new Date(todayISO() + 'T00:00:00').getTime()
+  const target = new Date(iso + 'T00:00:00').getTime()
+  return Math.round((target - today) / 86_400_000)
+}
+
+/** "Gajian 21 hari lagi" / "Gajian hari ini" / "Periode berjalan" */
+function headline(active: PaydayMonth | undefined, next: PaydayMonth | undefined): string {
+  if (next && !next.isPast) {
+    const d = daysUntil(next.payday)
+    if (d === 0) return 'Gajian hari ini'
+    if (d === 1) return 'Gajian besok'
+    return `Gajian ${d} hari lagi`
+  }
+  if (active) return `Periode ${active.label}`
+  return 'Gajian'
 }
 
 function MonthRow({
@@ -22,49 +41,46 @@ function MonthRow({
   const recorded = month.loggedAmount !== null
 
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-white/5 px-3.5 py-3">
+    <div className="flex items-center gap-3 rounded-[18px] border border-line bg-surface px-3.5 py-3">
+      <span
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px] ${
+          recorded ? 'bg-accent-soft2 text-accent' : 'bg-surface-alt text-faint'
+        }`}
+      >
+        {recorded ? <Check size={16} strokeWidth={2.6} /> : <CalendarDays size={16} />}
+      </span>
+
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-white">
+        <p className="truncate text-sm font-bold text-content">
           {month.label}
-          {month.isCurrentMonth && (
-            <span className="ml-2 rounded-md bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-medium text-indigo-300">
-              Bulan ini
-            </span>
-          )}
-          {!month.isCurrentMonth && month.isActiveCycle && (
-            <span className="ml-2 rounded-md bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
-              Periode berjalan
+          {month.isActiveCycle && (
+            <span className="ml-2 rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-bold text-accent">
+              Berjalan
             </span>
           )}
         </p>
-        <p className="mt-0.5 text-xs text-white/40">
-          Gajian {formatDateShort(month.payday)}
-        </p>
-        <p className="text-[11px] text-white/25">
-          Nutupin {formatDateShort(month.payday)} – {formatDateShort(month.periodEnd)}
+        <p className="text-[11px] text-subtle">
+          {formatDateShort(month.payday)} – {formatDateShort(month.periodEnd)}
         </p>
       </div>
 
       {recorded ? (
-        <button
-          onClick={() => onEdit(month)}
-          className="shrink-0 text-right"
-          aria-label={`Ubah gaji ${month.label}`}
-        >
-          <span className="block text-sm font-semibold text-emerald-400">
+        <button onClick={() => onEdit(month)} className="shrink-0 text-right">
+          <span className="nums block text-sm font-extrabold text-accent">
             {formatIDR(month.loggedAmount!)}
           </span>
-          <span className="block text-[11px] text-white/30">Ketuk buat ubah</span>
+          <span className="block text-[10px] text-faint">ketuk buat ubah</span>
         </button>
       ) : month.isPast ? (
         <button
           onClick={() => onRecord(month)}
-          className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 active:bg-indigo-700"
+          className="flex shrink-0 items-center gap-1 rounded-xl bg-accent px-3 py-2 text-xs font-bold text-on-accent"
         >
-          + Catat
+          <Plus size={13} strokeWidth={2.6} />
+          Catat
         </button>
       ) : (
-        <span className="shrink-0 text-xs text-white/30">Belum jatuh tempo</span>
+        <span className="shrink-0 text-[11px] text-faint">belum jatuh tempo</span>
       )}
     </div>
   )
@@ -77,44 +93,49 @@ export function PaydayPanel({
   onEdit,
   onManageHolidays,
 }: PaydayPanelProps) {
-  const [expanded, setExpanded] = useState(false)
+  const [open, setOpen] = useState(false)
 
-  const current = months[0]
-  const rest = months.slice(1)
-  const visible = expanded ? rest : rest.slice(0, 2)
+  const active = months.find((m) => m.isActiveCycle)
+  const next = months.find((m) => !m.isPast) ?? months[0]
+  if (!active && !next) return null
 
-  if (!current) return null
+  const reference = next && !next.isPast ? next : active
+  const needsAttention = unrecordedPastCount > 0
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-white/70">Gajian</h2>
-          {unrecordedPastCount > 0 && (
-            <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] font-medium text-amber-300">
-              {unrecordedPastCount} belum dicatat
-            </span>
-          )}
+    <section className="flex flex-col gap-2.5">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-3 rounded-[20px] border border-accent-line bg-accent-soft px-4 py-3.5 text-left"
+      >
+        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-xl bg-accent text-on-accent">
+          <CalendarDays size={17} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] font-bold text-content">{headline(active, next)}</p>
+          <p className="truncate text-[11px] text-label">
+            {reference && formatDateShort(reference.payday)}
+            {needsAttention && ` · ${unrecordedPastCount} belum dicatat`}
+          </p>
         </div>
-        <button onClick={onManageHolidays} className="text-xs text-white/40 hover:text-white/70">
-          Kelola libur
-        </button>
-      </div>
+        <ChevronRight
+          size={17}
+          className={`shrink-0 text-accent transition-transform ${open ? 'rotate-90' : ''}`}
+        />
+      </button>
 
-      <div className="flex flex-col gap-2">
-        <MonthRow month={current} onRecord={onRecord} onEdit={onEdit} />
-        {visible.map((m) => (
-          <MonthRow key={m.monthStart} month={m} onRecord={onRecord} onEdit={onEdit} />
-        ))}
-      </div>
-
-      {rest.length > 2 && (
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-3 w-full rounded-lg py-2 text-xs font-medium text-indigo-400 hover:bg-white/5 hover:text-indigo-300"
-        >
-          {expanded ? 'Tampilkan lebih sedikit' : `Lihat ${rest.length - 2} bulan sebelumnya`}
-        </button>
+      {open && (
+        <div className="flex flex-col gap-2">
+          {months.slice(0, 6).map((m) => (
+            <MonthRow key={m.monthStart} month={m} onRecord={onRecord} onEdit={onEdit} />
+          ))}
+          <button
+            onClick={onManageHolidays}
+            className="self-start px-1 py-1 text-xs font-bold text-muted"
+          >
+            Kelola hari libur
+          </button>
+        </div>
       )}
     </section>
   )

@@ -8,6 +8,9 @@ interface CurrencyInputProps {
   autoFocus?: boolean
   required?: boolean
   id?: string
+  /** the design's hero amount field: label above, oversized figure, caret bar */
+  hero?: boolean
+  heroLabel?: string
 }
 
 /**
@@ -22,13 +25,41 @@ export function CurrencyInput({
   autoFocus,
   required,
   id,
+  hero = false,
+  heroLabel = 'Berapa?',
 }: CurrencyInputProps) {
   const generatedId = useId()
   const inputId = id ?? generatedId
 
+  if (hero) {
+    return (
+      <label
+        htmlFor={inputId}
+        className="flex cursor-text flex-col gap-2 rounded-3xl border border-line bg-surface p-5"
+      >
+        <span className="text-xs font-bold text-muted">{heroLabel}</span>
+        <span className="flex items-baseline gap-1.5">
+          <span className="text-base font-bold text-muted">Rp</span>
+          <input
+            id={inputId}
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            autoFocus={autoFocus}
+            required={required}
+            value={groupDigits(value)}
+            onChange={(e) => onChange(e.target.value.replace(/\D/g, ''))}
+            placeholder={placeholder}
+            className="nums w-full min-w-0 border-none bg-transparent p-0 text-[34px] font-extrabold text-content outline-none placeholder:text-faint"
+          />
+        </span>
+      </label>
+    )
+  }
+
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-base text-white/40">
+      <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[15px] font-bold text-muted">
         Rp
       </span>
       <input
@@ -41,7 +72,7 @@ export function CurrencyInput({
         value={groupDigits(value)}
         onChange={(e) => onChange(e.target.value.replace(/\D/g, ''))}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-10 pr-3.5 text-right text-lg font-semibold tabular-nums text-white placeholder-white/30 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+        className="nums h-[52px] w-full rounded-2xl border border-line-input bg-surface py-0 pl-11 pr-4 text-right text-lg font-extrabold text-content outline-none transition-colors placeholder:text-faint focus:border-accent"
       />
     </div>
   )

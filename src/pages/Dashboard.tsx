@@ -1,20 +1,22 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { LogOut } from 'lucide-react'
 import { useTransactions } from '../hooks/useTransactions'
 import { useSeedDefaultCategories } from '../hooks/useCategories'
 import { usePaydayHistory, type PaydayMonth } from '../hooks/usePaydayHistory'
 import { usePayPeriods } from '../hooks/usePayPeriods'
 import { useAccountBalances } from '../hooks/useAccounts'
-import { AccountBalances } from '../components/AccountBalances'
-import { AccountManager } from '../components/AccountManager'
+import { useAuth } from '../hooks/useAuth'
+import { useRegisterAddAction } from '../hooks/useAddAction'
 import { SummaryCards } from '../components/SummaryCards'
 import { CategoryChart, type CategorySlice } from '../components/CategoryChart'
 import { TransactionList } from '../components/TransactionList'
 import { TransactionForm } from '../components/TransactionForm'
 import { PaydayPanel } from '../components/PaydayPanel'
 import { HolidayManager } from '../components/HolidayManager'
+import { AccountBalances } from '../components/AccountBalances'
+import { AccountManager } from '../components/AccountManager'
 import { Modal } from '../components/ui/Modal'
-import { Button } from '../components/ui/Button'
 import { LoadingBlock, ErrorBanner } from '../components/ui/Feedback'
 import { formatDateShort } from '../lib/format'
 import type { TransactionType, TransactionWithCategory } from '../types'
@@ -27,6 +29,14 @@ interface Prefill {
   note?: string
 }
 
+function greeting(): string {
+  const h = new Date().getHours()
+  if (h < 11) return 'Selamat pagi'
+  if (h < 15) return 'Selamat siang'
+  if (h < 19) return 'Selamat sore'
+  return 'Selamat malam'
+}
+
 export default function Dashboard() {
   useSeedDefaultCategories(true)
 
@@ -36,6 +46,7 @@ export default function Dashboard() {
   const { data: transactions, isLoading, isError } = useTransactions(range)
   const { months, gajiCategory, unrecordedPastCount } = usePaydayHistory()
   const { balances, totalBalance } = useAccountBalances()
+  const { signOut } = useAuth()
 
   const [formOpen, setFormOpen] = useState(false)
   const [holidaysOpen, setHolidaysOpen] = useState(false)
@@ -62,7 +73,7 @@ export default function Dashboard() {
       if (existing) {
         existing.value += t.amount
       } else {
-        map.set(key, { name: key, value: t.amount, color: t.category?.color ?? '#64748b' })
+        map.set(key, { name: key, value: t.amount, color: t.category?.color ?? '#8a8a80' })
       }
       if (t.type === 'income') income += t.amount
       else expense += t.amount
@@ -76,11 +87,13 @@ export default function Dashboard() {
     }
   }, [transactions])
 
-  function openAdd() {
+  const openAdd = useCallback(() => {
     setEditing(undefined)
     setPrefill(undefined)
     setFormOpen(true)
-  }
+  }, [])
+
+  useRegisterAddAction(openAdd)
 
   function openEdit(t: TransactionWithCategory) {
     setEditing(t)
@@ -114,69 +127,87 @@ export default function Dashboard() {
     setFormOpen(true)
   }
 
+  const net = totalIncome - totalExpense
+  const status =
+    period === 'all'
+      ? 'Semua catatan kamu'
+      : net >= 0
+        ? 'Periode ini masih aman'
+        : 'Periode ini lagi minus'
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div className="inline-flex rounded-xl bg-white/5 p-1">
-          {(['cycle', 'all'] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                period === p ? 'bg-indigo-600 text-white' : 'text-white/50'
-              }`}
-            >
-              {p === 'cycle' ? cycle.label : 'Semua'}
-            </button>
-          ))}
+    <div className="flex flex-col gap-5">
+      <header className="flex items-start justify-between">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[13px] text-muted">{greeting()}</span>
+          <h1 className="text-[17px] font-extrabold tracking-tight text-content">{status}</h1>
         </div>
-        <Button onClick={openAdd} className="!px-3 !py-2">
-          + Tambah
-        </Button>
+        <button
+          onClick={() => signOut()}
+          aria-label="Keluar"
+          className="flex h-[38px] w-[38px] items-center justify-center rounded-[13px] border border-line-input bg-surface text-label"
+        >
+          <LogOut size={16} />
+        </button>
+      </header>
+
+      <div className="flex gap-1.5 rounded-2xl bg-surface-alt p-1.5">
+        {(['cycle', 'all'] as const).map((p) => (
+          <button
+            key={p}
+            onClick={() => setPeriod(p)}
+            className={`flex-1 rounded-xl py-2 text-xs font-bold transition-colors ${
+              period === p ? 'bg-surface text-content shadow-sm' : 'text-muted'
+            }`}
+          >
+            {p === 'cycle' ? cycle.label : 'Semua'}
+          </button>
+        ))}
       </div>
-
-      {period === 'cycle' && (
-        <p className="-mt-4 text-xs text-white/40">
-          {formatDateShort(cycle.start)} – {formatDateShort(cycle.end)} · sejak gajian sampai
-          sehari sebelum gajian berikutnya
-        </p>
-      )}
-
-      <AccountBalances
-        balances={balances}
-        totalBalance={totalBalance}
-        onManage={() => setAccountsOpen(true)}
-        onTransfer={openTransfer}
-      />
-
-      <PaydayPanel
-        months={months}
-        unrecordedPastCount={unrecordedPastCount}
-        onRecord={openPaydayRecord}
-        onEdit={openPaydayEdit}
-        onManageHolidays={() => setHolidaysOpen(true)}
-      />
 
       {isLoading && <LoadingBlock />}
       {isError && <ErrorBanner message="Gagal memuat transaksi. Coba sebentar lagi." />}
 
       {!isLoading && !isError && (
         <>
-          <SummaryCards totalIncome={totalIncome} totalExpense={totalExpense} />
+          <SummaryCards
+            totalIncome={totalIncome}
+            totalExpense={totalExpense}
+            periodLabel={
+              period === 'cycle'
+                ? `${formatDateShort(cycle.start).replace(/ \d{4}$/, '')} – ${formatDateShort(cycle.end).replace(/ \d{4}$/, '')}`
+                : undefined
+            }
+          />
 
-          <section>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white/70">Rincian</h2>
-              <div className="inline-flex rounded-xl bg-white/5 p-1">
+          <AccountBalances
+            balances={balances}
+            totalBalance={totalBalance}
+            onManage={() => setAccountsOpen(true)}
+            onTransfer={openTransfer}
+          />
+
+          <PaydayPanel
+            months={months}
+            unrecordedPastCount={unrecordedPastCount}
+            onRecord={openPaydayRecord}
+            onEdit={openPaydayEdit}
+            onManageHolidays={() => setHolidaysOpen(true)}
+          />
+
+          <section className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[13px] font-extrabold text-content">Ke mana uangnya</h2>
+              <div className="flex gap-1 rounded-xl bg-surface-alt p-1">
                 {(['expense', 'income'] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => setBreakdownType(t)}
-                    className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
-                      breakdownType === t ? 'bg-indigo-600 text-white' : 'text-white/50'
+                    className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                      breakdownType === t ? 'bg-surface text-content' : 'text-muted'
                     }`}
                   >
-                    {t === 'expense' ? 'Pengeluaran' : 'Pemasukan'}
+                    {t === 'expense' ? 'Keluar' : 'Masuk'}
                   </button>
                 ))}
               </div>
@@ -184,10 +215,10 @@ export default function Dashboard() {
             <CategoryChart data={breakdownType === 'expense' ? expenseSlices : incomeSlices} />
           </section>
 
-          <section>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white/70">Transaksi terbaru</h2>
-              <Link to="/transactions" className="text-xs text-indigo-400 hover:text-indigo-300">
+          <section className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[13px] font-extrabold text-content">Transaksi terbaru</h2>
+              <Link to="/transactions" className="text-xs font-bold text-accent">
                 Lihat semua
               </Link>
             </div>
@@ -199,7 +230,15 @@ export default function Dashboard() {
       <Modal
         open={formOpen}
         onClose={() => setFormOpen(false)}
-        title={editing ? 'Ubah transaksi' : 'Tambah transaksi'}
+        title={
+          editing
+            ? 'Ubah transaksi'
+            : prefill?.type === 'transfer'
+              ? 'Transfer antar rekening'
+              : prefill?.type === 'income'
+                ? 'Catat pemasukan'
+                : 'Catat pengeluaran'
+        }
       >
         <TransactionForm
           key={editing?.id ?? `${prefill?.type ?? ''}-${prefill?.date ?? 'new'}`}

@@ -1,4 +1,6 @@
+import { ArrowLeftRight } from 'lucide-react'
 import { formatIDR } from '../lib/format'
+import { iconForAccount } from '../lib/categoryIcons'
 import type { AccountBalance } from '../types'
 
 interface AccountBalancesProps {
@@ -7,6 +9,13 @@ interface AccountBalancesProps {
   onManage: () => void
   onTransfer: () => void
 }
+
+const TINTS = [
+  { bg: 'bg-blue-soft', fg: 'text-blue' },
+  { bg: 'bg-amber-soft', fg: 'text-amber' },
+  { bg: 'bg-accent-soft2', fg: 'text-accent' },
+  { bg: 'bg-expense-soft', fg: 'text-expense' },
+]
 
 export function AccountBalances({
   balances,
@@ -17,64 +26,64 @@ export function AccountBalances({
   if (balances.length === 0) return null
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-white/70">Rekening</h2>
-        <div className="flex items-center gap-3">
+    <section className="flex flex-col gap-2.5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-[13px] font-extrabold text-content">Rekening</h2>
+        <div className="flex items-center gap-3.5">
           {balances.length > 1 && (
-            <button onClick={onTransfer} className="text-xs text-indigo-400 hover:text-indigo-300">
-              ⇄ Transfer
+            <button
+              onClick={onTransfer}
+              className="flex items-center gap-1.5 text-xs font-bold text-accent"
+            >
+              <ArrowLeftRight size={13} strokeWidth={2.5} />
+              Transfer
             </button>
           )}
-          <button onClick={onManage} className="text-xs text-white/40 hover:text-white/70">
-            Kelola
+          <button onClick={onManage} className="text-xs font-bold text-muted">
+            Atur
           </button>
         </div>
       </div>
 
-      <div className="mb-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-white/40">Total semua</p>
-        <p
-          className={`mt-0.5 text-2xl font-semibold tabular-nums ${
-            totalBalance >= 0 ? 'text-white' : 'text-red-400'
+      <div className="flex gap-2.5 overflow-x-auto pb-1">
+        {balances.map((b, i) => {
+          const Icon = iconForAccount(b.account.name)
+          const tint = TINTS[i % TINTS.length]
+          return (
+            <div
+              key={b.account.id}
+              className="flex min-w-[104px] flex-1 flex-col gap-2 rounded-[18px] border border-line bg-surface p-3.5"
+            >
+              <span
+                className={`flex h-[26px] w-[26px] items-center justify-center rounded-[9px] ${tint.bg} ${tint.fg}`}
+              >
+                <Icon size={14} />
+              </span>
+              <span className="truncate text-[11px] font-semibold text-muted">
+                {b.account.name}
+                {b.account.is_payroll && ' · gajian'}
+              </span>
+              <span
+                className={`nums text-sm font-extrabold ${
+                  b.balance < 0 ? 'text-expense' : 'text-content'
+                }`}
+              >
+                {formatIDR(b.balance).replace(/^Rp\s?/, '')}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="flex items-baseline justify-between px-1 pt-0.5">
+        <span className="text-[11px] font-semibold text-muted">Total semua rekening</span>
+        <span
+          className={`nums text-[13px] font-extrabold ${
+            totalBalance < 0 ? 'text-expense' : 'text-content'
           }`}
         >
           {formatIDR(totalBalance)}
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        {balances.map((b) => (
-          <div
-            key={b.account.id}
-            className="flex items-center gap-3 rounded-xl bg-white/5 px-3.5 py-3"
-          >
-            <span
-              className="h-8 w-1 shrink-0 rounded-full"
-              style={{ backgroundColor: b.account.color }}
-            />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-white">
-                {b.account.name}
-                {b.account.is_payroll && (
-                  <span className="ml-2 rounded-md bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-medium text-sky-300">
-                    Payroll
-                  </span>
-                )}
-              </p>
-              <p className="text-xs text-white/40">
-                {b.account.kind === 'savings' ? 'Simpanan / darurat' : 'Pengeluaran harian'}
-              </p>
-            </div>
-            <span
-              className={`shrink-0 text-sm font-semibold tabular-nums ${
-                b.balance >= 0 ? 'text-white' : 'text-red-400'
-              }`}
-            >
-              {formatIDR(b.balance)}
-            </span>
-          </div>
-        ))}
+        </span>
       </div>
     </section>
   )

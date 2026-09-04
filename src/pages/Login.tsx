@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
+import { Lock, Mail, Wallet } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { Button } from '../components/ui/Button'
-import { Input, Label } from '../components/ui/Input'
+import { IconInput, Label } from '../components/ui/Input'
 import { ErrorBanner } from '../components/ui/Feedback'
 
 export default function Login() {
@@ -34,10 +35,7 @@ export default function Login() {
           setMode('login')
         }
       } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
         if (signInError) throw signInError
       }
     } catch (err) {
@@ -48,20 +46,35 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0f0f1a] px-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-semibold text-white">Finance Tracker</h1>
-          <p className="mt-1 text-sm text-white/40">Catat pemasukan & pengeluaran kamu</p>
+    <div className="mx-auto flex min-h-screen max-w-lg flex-col justify-center bg-bg px-7 py-10">
+      <div className="flex flex-col gap-7">
+        <div className="flex flex-col gap-4">
+          <span className="flex h-[52px] w-[52px] items-center justify-center rounded-[18px] bg-accent text-on-accent">
+            <Wallet size={24} />
+          </span>
+          <div className="flex flex-col gap-2">
+            <h1 className="text-[28px] font-extrabold leading-tight tracking-tight text-content">
+              Uangmu, rapi
+              <br />
+              tanpa ribet.
+            </h1>
+            <p className="text-sm leading-relaxed text-muted">
+              {mode === 'login'
+                ? 'Masuk dulu, nanti kita catat pengeluaran hari ini bareng.'
+                : 'Bikin akun dulu, cuma butuh email sama kata sandi.'}
+            </p>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>
             <Label htmlFor="email">Email</Label>
-            <Input
+            <IconInput
               id="email"
               type="email"
               autoComplete="email"
+              placeholder="kamu@mail.com"
+              icon={<Mail size={17} />}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -69,10 +82,12 @@ export default function Login() {
           </div>
           <div>
             <Label htmlFor="password">Kata sandi</Label>
-            <Input
+            <IconInput
               id="password"
               type="password"
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              placeholder="••••••••"
+              icon={<Lock size={17} />}
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -82,25 +97,28 @@ export default function Login() {
 
           {error && <ErrorBanner message={error} />}
           {info && (
-            <p className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-3 text-sm text-indigo-300">
+            <p className="rounded-2xl bg-accent-soft px-4 py-3 text-[13px] leading-relaxed text-accent">
               {info}
             </p>
           )}
 
-          <Button type="submit" disabled={submitting}>
+          <Button type="submit" disabled={submitting} className="mt-2 !h-[54px] !py-0">
             {submitting ? 'Tunggu sebentar…' : mode === 'login' ? 'Masuk' : 'Daftar'}
           </Button>
         </form>
 
         <button
-          className="mt-4 w-full text-center text-sm text-white/40 hover:text-white/70"
+          className="text-center text-[13px] text-muted"
           onClick={() => {
             setMode(mode === 'login' ? 'signup' : 'login')
             setError(null)
             setInfo(null)
           }}
         >
-          {mode === 'login' ? 'Belum punya akun? Daftar' : 'Udah punya akun? Masuk'}
+          {mode === 'login' ? 'Belum punya akun? ' : 'Udah punya akun? '}
+          <span className="font-bold text-accent">
+            {mode === 'login' ? 'Daftar gratis' : 'Masuk'}
+          </span>
         </button>
       </div>
     </div>

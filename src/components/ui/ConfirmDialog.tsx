@@ -1,3 +1,4 @@
+import { TriangleAlert } from 'lucide-react'
 import { Button } from './Button'
 
 interface ConfirmDialogProps {
@@ -26,16 +27,21 @@ export function ConfirmDialog({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-4 sm:items-center">
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 p-4 sm:items-center">
       <button aria-label="Batal" className="absolute inset-0 cursor-default" onClick={onCancel} />
       <div
         role="alertdialog"
         aria-modal="true"
-        className="safe-bottom relative w-full max-w-sm rounded-2xl bg-[#17182a] p-5"
+        className="safe-bottom relative w-full max-w-sm rounded-[28px] border border-line bg-bg p-5"
       >
-        <h2 className="text-base font-semibold text-white">{title}</h2>
-        <p className="mt-2 text-sm text-white/60">{message}</p>
-        <div className="mt-5 flex gap-2">
+        {destructive && (
+          <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-expense-soft text-expense">
+            <TriangleAlert size={18} />
+          </span>
+        )}
+        <h2 className="text-base font-extrabold tracking-tight text-content">{title}</h2>
+        <p className="mt-2 text-[13px] leading-relaxed text-muted">{message}</p>
+        <div className="mt-5 flex gap-2.5">
           <Button variant="secondary" onClick={onCancel} className="flex-1" disabled={busy}>
             {cancelLabel}
           </Button>

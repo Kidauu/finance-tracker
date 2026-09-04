@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { Check, Trash2, X } from 'lucide-react'
 import { formatIDR, groupDigits } from '../lib/format'
+import { CategoryIcon } from '../lib/categoryIcons'
 import type { Category } from '../types'
 
 interface BudgetCardProps {
@@ -22,7 +24,7 @@ export function BudgetCard({
   deleting,
 }: BudgetCardProps) {
   const [editing, setEditing] = useState(false)
-  const [value, setValue] = useState(String(allocated || ''))
+  const [value, setValue] = useState(String(Math.round(allocated) || ''))
 
   const remaining = allocated - spent
   const pct = allocated > 0 ? Math.min(100, Math.round((spent / allocated) * 100)) : 0
@@ -35,39 +37,57 @@ export function BudgetCard({
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.color }} />
-          <span className="text-sm font-medium text-white">{category.name}</span>
+    <div className="flex flex-col gap-3 rounded-[22px] border border-line bg-surface p-4">
+      <div className="flex items-center gap-3">
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px]"
+          style={{ backgroundColor: category.color + '22', color: category.color }}
+        >
+          <CategoryIcon name={category.name} size={16} />
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-extrabold text-content">{category.name}</p>
+          <p className="text-[11px] text-subtle">
+            {allocated > 0 ? `terpakai ${pct}%` : `terpakai ${formatIDR(spent)}`}
+          </p>
         </div>
+
         {!editing && (
-          <div className="flex items-center gap-3">
+          <>
+            {allocated > 0 && (
+              <span
+                className="nums shrink-0 text-[13px] font-extrabold"
+                style={{ color: over ? undefined : category.color }}
+              >
+                <span className={over ? 'text-expense' : undefined}>{pct}%</span>
+              </span>
+            )}
             <button
               onClick={() => {
-                setValue(String(allocated || ''))
+                setValue(String(Math.round(allocated) || ''))
                 setEditing(true)
               }}
-              className="text-xs text-white/40 hover:text-white/70"
+              className="shrink-0 text-xs font-bold text-muted hover:text-content"
             >
-              {allocated > 0 ? 'Ubah pot' : 'Set pot'}
+              {allocated > 0 ? 'Ubah' : 'Set pot'}
             </button>
             <button
               onClick={onDelete}
               disabled={deleting}
               aria-label={`Hapus pot ${category.name}`}
-              className="text-xs text-white/30 hover:text-red-400 disabled:opacity-40"
+              className="shrink-0 rounded-lg p-1 text-faint hover:text-expense disabled:opacity-40"
             >
-              🗑
+              <Trash2 size={14} />
             </button>
-          </div>
+          </>
         )}
       </div>
 
       {editing ? (
-        <div className="mt-3 flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <div className="relative flex-1">
-            <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-white/40">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted">
               Rp
             </span>
             <input
@@ -78,48 +98,49 @@ export function BudgetCard({
               value={groupDigits(value)}
               onChange={(e) => setValue(e.target.value.replace(/\D/g, ''))}
               placeholder="0"
-              className="w-full rounded-lg border border-white/10 bg-white/5 py-1.5 pl-9 pr-2.5 text-right text-sm font-semibold tabular-nums text-white outline-none focus:border-indigo-500"
+              className="nums h-11 w-full rounded-xl border border-line-input bg-bg py-0 pl-10 pr-3 text-right text-sm font-extrabold text-content outline-none focus:border-accent"
             />
           </div>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500"
+            aria-label="Simpan pot"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-on-accent"
           >
-            Simpan
+            <Check size={16} strokeWidth={2.6} />
           </button>
           <button
             onClick={() => setEditing(false)}
-            className="rounded-lg px-2 py-1.5 text-xs text-white/40 hover:text-white/70"
+            aria-label="Batal"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-alt text-muted"
           >
-            ✕
+            <X size={16} />
           </button>
         </div>
-      ) : (
+      ) : allocated > 0 ? (
         <>
-          {allocated > 0 ? (
-            <>
-              <div className="mt-3 flex items-baseline justify-between text-sm">
-                <span className="text-white/50">
-                  {formatIDR(spent)} / {formatIDR(allocated)}
-                </span>
-                <span className={over ? 'text-red-400' : 'text-white/70'}>
-                  {over ? `Lebih ${formatIDR(Math.abs(remaining))}` : `Sisa ${formatIDR(remaining)}`}
-                </span>
-              </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className={`h-full rounded-full transition-all ${over ? 'bg-red-500' : 'bg-indigo-500'}`}
-                  style={{ width: `${allocated > 0 ? (over ? 100 : pct) : 0}%` }}
-                />
-              </div>
-            </>
-          ) : (
-            <p className="mt-2 text-sm text-white/40">
-              Belum ada pot. Terpakai {formatIDR(spent)} periode ini.
-            </p>
-          )}
+          <div className="h-2.5 overflow-hidden rounded-full bg-track">
+            <div
+              className="h-full rounded-full transition-all"
+              style={{
+                width: `${over ? 100 : pct}%`,
+                backgroundColor: over ? 'var(--expense)' : category.color,
+              }}
+            />
+          </div>
+          <div className="flex justify-between text-[11px]">
+            <span className="nums font-bold text-content">
+              {formatIDR(spent).replace(/^Rp\s?/, '')}
+            </span>
+            <span className={over ? 'font-bold text-expense' : 'text-subtle'}>
+              {over
+                ? `lebih ${formatIDR(Math.abs(remaining))}`
+                : `sisa ${formatIDR(remaining)} dari ${formatIDR(allocated)}`}
+            </span>
+          </div>
         </>
+      ) : (
+        <p className="text-[11px] text-subtle">Belum ada jatah. Ketuk "Set pot" buat nentuin.</p>
       )}
     </div>
   )

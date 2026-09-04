@@ -1,19 +1,27 @@
 import { useState, type FormEvent } from 'react'
+import { Trash2 } from 'lucide-react'
 import { useAddCategory, useCategories, useDeleteCategory } from '../hooks/useCategories'
+import { useToast } from '../hooks/useToast'
 import { Button } from './ui/Button'
 import { Input, Label } from './ui/Input'
+import { ConfirmDialog } from './ui/ConfirmDialog'
 import { SWATCHES } from '../lib/colorSwatches'
-import type { CategoryType } from '../types'
+import { iconForCategory } from '../lib/categoryIcons'
+import type { Category, CategoryType } from '../types'
 
 export function CategoryManager() {
   const { data: categories } = useCategories()
   const addCategory = useAddCategory()
   const deleteCategory = useDeleteCategory()
+  const { showToast } = useToast()
 
   const [name, setName] = useState('')
   const [type, setType] = useState<CategoryType>('expense')
   const [color, setColor] = useState(SWATCHES[0])
   const [error, setError] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<Category | null>(null)
+
+  const listed = (categories ?? []).filter((c) => c.type === type)
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault()
@@ -24,31 +32,74 @@ export function CategoryManager() {
     }
     try {
       await addCategory.mutateAsync({ name: name.trim(), type, color })
+      showToast('Kategori ditambahkan')
       setName('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal menambah kategori')
     }
   }
 
+  async function handleConfirmDelete() {
+    if (!pendingDelete) return
+    try {
+      await deleteCategory.mutateAsync(pendingDelete.id)
+      showToast(`Kategori "${pendingDelete.name}" dihapus`)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Gagal menghapus', 'error')
+    } finally {
+      setPendingDelete(null)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-5">
-      <form onSubmit={handleAdd} className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-2">
-          {(['expense', 'income'] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setType(t)}
-              className={`rounded-xl py-2 text-sm font-medium ${
-                type === t ? 'bg-indigo-600 text-white' : 'bg-white/5 text-white/50'
-              }`}
+      <div className="flex gap-1.5 rounded-2xl bg-surface-alt p-1.5">
+        {(['expense', 'income'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setType(t)}
+            className={`flex-1 rounded-xl py-2.5 text-xs font-bold transition-colors ${
+              type === t ? 'bg-surface text-content shadow-sm' : 'text-muted'
+            }`}
+          >
+            {t === 'expense' ? 'Pengeluaran' : 'Pemasukan'}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+        {listed.map((c) => {
+          const Icon = iconForCategory(c.name)
+          return (
+            <div
+              key={c.id}
+              className="flex items-center gap-3 rounded-2xl border border-line bg-surface px-3.5 py-2.5"
             >
-              {t === 'expense' ? 'Pengeluaran' : 'Pemasukan'}
-            </button>
-          ))}
-        </div>
+              <span
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
+                style={{ backgroundColor: c.color + '22', color: c.color }}
+              >
+                <Icon size={15} />
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-content">
+                {c.name}
+              </span>
+              <button
+                onClick={() => setPendingDelete(c)}
+                aria-label={`Hapus ${c.name}`}
+                className="shrink-0 rounded-lg p-1 text-faint hover:text-expense"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          )
+        })}
+      </div>
+
+      <form onSubmit={handleAdd} className="flex flex-col gap-3.5 border-t border-line pt-5">
         <div>
-          <Label htmlFor="cat-name">Nama</Label>
+          <Label htmlFor="cat-name">Kategori baru</Label>
           <Input
             id="cat-name"
             value={name}
@@ -58,52 +109,39 @@ export function CategoryManager() {
         </div>
         <div>
           <Label>Warna</Label>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {SWATCHES.map((s) => (
               <button
                 key={s}
                 type="button"
-                aria-label={`Choose ${s}`}
+                aria-label={`Pilih warna ${s}`}
                 onClick={() => setColor(s)}
-                className={`h-7 w-7 rounded-full ${color === s ? 'ring-2 ring-white' : ''}`}
+                className={`h-8 w-8 rounded-full transition-transform ${
+                  color === s ? 'scale-110 ring-2 ring-content ring-offset-2 ring-offset-bg' : ''
+                }`}
                 style={{ backgroundColor: s }}
               />
             ))}
           </div>
         </div>
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-[13px] font-medium text-expense">{error}</p>}
         <Button type="submit" disabled={addCategory.isPending}>
           {addCategory.isPending ? 'Menambah…' : 'Tambah kategori'}
         </Button>
       </form>
 
-      <div>
-        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-white/40">
-          Kategori kamu
-        </p>
-        <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto">
-          {(categories ?? []).map((c) => (
-            <div
-              key={c.id}
-              className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2"
-            >
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c.color }} />
-                <span className="text-sm text-white/80">{c.name}</span>
-                <span className="text-xs text-white/30">
-                  ({c.type === 'expense' ? 'pengeluaran' : 'pemasukan'})
-                </span>
-              </div>
-              <button
-                onClick={() => deleteCategory.mutate(c.id)}
-                className="text-xs text-white/30 hover:text-red-400"
-              >
-                Hapus
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Hapus kategori?"
+        message={
+          pendingDelete
+            ? `"${pendingDelete.name}" akan dihapus. Transaksi lama tetap tersimpan tapi jadi tanpa kategori.`
+            : ''
+        }
+        busy={deleteCategory.isPending}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   )
 }

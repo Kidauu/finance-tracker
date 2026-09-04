@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Trash2 } from 'lucide-react'
 import {
   useAccounts,
   useAccountBalances,
@@ -13,6 +14,7 @@ import { ConfirmDialog } from './ui/ConfirmDialog'
 import { CurrencyInput } from './ui/CurrencyInput'
 import { formatIDR } from '../lib/format'
 import { SWATCHES } from '../lib/colorSwatches'
+import { iconForAccount } from '../lib/categoryIcons'
 import type { Account, AccountKind } from '../types'
 
 export function AccountManager() {
@@ -104,59 +106,77 @@ export function AccountManager() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2.5">
         {(accounts ?? []).map((a) => {
           const balance = balances.find((b) => b.account.id === a.id)?.balance ?? 0
+          const Icon = iconForAccount(a.name)
           return (
-            <div key={a.id} className="rounded-xl bg-white/5 px-3.5 py-3">
+            <div key={a.id} className="rounded-[22px] border border-line bg-surface p-4">
               <div className="flex items-center gap-3">
                 <span
-                  className="h-7 w-1 shrink-0 rounded-full"
-                  style={{ backgroundColor: a.color }}
-                />
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px]"
+                  style={{ backgroundColor: a.color + '22', color: a.color }}
+                >
+                  <Icon size={16} />
+                </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-white">{a.name}</p>
-                  <p className="text-xs text-white/40">{formatIDR(balance)}</p>
+                  <p className="truncate text-sm font-extrabold text-content">
+                    {a.name}
+                    {a.is_payroll && (
+                      <span className="ml-2 rounded-md bg-blue-soft px-1.5 py-0.5 text-[10px] font-bold text-blue">
+                        Payroll
+                      </span>
+                    )}
+                  </p>
+                  <p
+                    className={`nums text-[11px] font-bold ${
+                      balance < 0 ? 'text-expense' : 'text-subtle'
+                    }`}
+                  >
+                    {formatIDR(balance)}
+                  </p>
                 </div>
                 <button
                   onClick={() => startReconcile(a.id, balance)}
-                  className="shrink-0 text-xs text-indigo-400 hover:text-indigo-300"
+                  className="shrink-0 text-xs font-bold text-accent"
                 >
                   Sesuaikan
                 </button>
                 <button
                   onClick={() => setPendingDelete(a)}
                   aria-label={`Hapus rekening ${a.name}`}
-                  className="shrink-0 text-xs text-white/30 hover:text-red-400"
+                  className="shrink-0 rounded-lg p-1 text-faint hover:text-expense"
                 >
-                  Hapus
+                  <Trash2 size={14} />
                 </button>
               </div>
 
               {reconcilingId === a.id && (
-                <div className="mt-3 rounded-lg bg-white/5 p-3">
-                  <Label htmlFor={`rec-${a.id}`}>Saldo asli di aplikasi bank</Label>
+                <div className="mt-3 flex flex-col gap-2.5 rounded-2xl bg-bg p-3">
+                  <Label htmlFor={`rec-${a.id}`} className="mb-0">
+                    Saldo asli di aplikasi bank
+                  </Label>
                   <CurrencyInput
                     id={`rec-${a.id}`}
                     value={reconcileValue}
                     onChange={setReconcileValue}
                     autoFocus
                   />
-                  <p className="mt-1.5 text-xs text-white/40">
+                  <p className="text-[11px] leading-relaxed text-muted">
                     Selisihnya dicatat sebagai saldo awal, jadi riwayat transaksimu gak berubah.
                   </p>
-                  <div className="mt-2.5 flex gap-2">
+                  <div className="flex gap-2">
                     <Button
                       variant="secondary"
                       onClick={() => setReconcilingId(null)}
-                      className="flex-1 !py-1.5 text-xs"
+                      className="flex-1 !py-2 text-xs"
                     >
                       Batal
                     </Button>
                     <Button
                       onClick={() => saveReconcile(a, balance)}
                       disabled={updateAccount.isPending}
-                      className="flex-1 !py-1.5 text-xs"
+                      className="flex-1 !py-2 text-xs"
                     >
                       Simpan
                     </Button>
@@ -164,13 +184,13 @@ export function AccountManager() {
                 </div>
               )}
 
-              <div className="mt-2.5 flex items-center gap-2">
+              <div className="mt-3 flex items-center gap-2">
                 <Select
                   value={a.kind}
                   onChange={(e) =>
                     updateAccount.mutate({ id: a.id, kind: e.target.value as AccountKind })
                   }
-                  className="!py-1.5 !text-xs"
+                  className="!h-9 !rounded-xl !text-xs"
                 >
                   <option value="spending">Pengeluaran harian</option>
                   <option value="savings">Simpanan / darurat</option>
@@ -178,8 +198,8 @@ export function AccountManager() {
                 <button
                   type="button"
                   onClick={() => updateAccount.mutate({ id: a.id, is_payroll: !a.is_payroll })}
-                  className={`shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                    a.is_payroll ? 'bg-sky-500/20 text-sky-300' : 'bg-white/5 text-white/40'
+                  className={`h-9 shrink-0 rounded-xl px-3 text-xs font-bold transition-colors ${
+                    a.is_payroll ? 'bg-blue-soft text-blue' : 'bg-surface-alt text-muted'
                   }`}
                 >
                   Payroll
@@ -191,7 +211,10 @@ export function AccountManager() {
       </div>
 
       {adding ? (
-        <form onSubmit={handleAdd} className="flex flex-col gap-3 rounded-xl bg-white/5 p-3.5">
+        <form
+          onSubmit={handleAdd}
+          className="flex flex-col gap-3.5 border-t border-line pt-5"
+        >
           <div>
             <Label htmlFor="acc-name">Nama rekening</Label>
             <Input
@@ -215,11 +238,7 @@ export function AccountManager() {
           </div>
           <div>
             <Label htmlFor="acc-balance">Saldo awal</Label>
-            <CurrencyInput
-              id="acc-balance"
-              value={openingBalance}
-              onChange={setOpeningBalance}
-            />
+            <CurrencyInput id="acc-balance" value={openingBalance} onChange={setOpeningBalance} />
           </div>
           <div>
             <Label>Warna</Label>
@@ -230,14 +249,16 @@ export function AccountManager() {
                   type="button"
                   aria-label={`Pilih warna ${s}`}
                   onClick={() => setColor(s)}
-                  className={`h-7 w-7 rounded-full ${color === s ? 'ring-2 ring-white' : ''}`}
+                  className={`h-8 w-8 rounded-full transition-transform ${
+                    color === s ? 'scale-110 ring-2 ring-content ring-offset-2 ring-offset-bg' : ''
+                  }`}
                   style={{ backgroundColor: s }}
                 />
               ))}
             </div>
           </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
-          <div className="flex gap-2">
+          {error && <p className="text-[13px] font-medium text-expense">{error}</p>}
+          <div className="flex gap-2.5">
             <Button
               type="button"
               variant="secondary"

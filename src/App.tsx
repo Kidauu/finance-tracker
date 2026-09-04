@@ -29,7 +29,7 @@ export default function App() {
           <BrowserRouter>
             <Suspense
               fallback={
-                <div className="flex min-h-screen items-center justify-center bg-[#0f0f1a]">
+                <div className="flex min-h-screen items-center justify-center bg-bg">
                   <LoadingBlock />
                 </div>
               }

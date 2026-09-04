@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { X } from 'lucide-react'
 import type { TransactionWithCategory } from '../types'
 import { formatDateShort, formatIDR, todayISO } from '../lib/format'
 import { useDeleteTransaction } from '../hooks/useTransactions'
 import { useToast } from '../hooks/useToast'
+import { iconForCategory, TransferIcon } from '../lib/categoryIcons'
 import { EmptyState } from './ui/Feedback'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 
@@ -21,14 +23,26 @@ function groupByDate(transactions: TransactionWithCategory[]) {
   return Array.from(groups.entries())
 }
 
+function yesterdayISO(): string {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function dateHeading(iso: string): string {
-  const today = todayISO()
-  if (iso === today) return `Hari ini · ${formatDateShort(iso)}`
-  const y = new Date()
-  y.setDate(y.getDate() - 1)
-  const yesterday = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, '0')}-${String(y.getDate()).padStart(2, '0')}`
-  if (iso === yesterday) return `Kemarin · ${formatDateShort(iso)}`
+  if (iso === todayISO()) return 'Hari ini'
+  if (iso === yesterdayISO()) return 'Kemarin'
   return formatDateShort(iso)
+}
+
+/** Rotates tint pairs by category colour family so rows read as a set. */
+function tintFor(t: TransactionWithCategory) {
+  if (t.type === 'transfer') return { bg: 'bg-accent-soft2', fg: 'text-accent' }
+  if (t.type === 'income') return { bg: 'bg-accent-soft2', fg: 'text-accent' }
+  const name = t.category?.name ?? ''
+  if (/transport|bbm|motor|gojek/i.test(name)) return { bg: 'bg-amber-soft', fg: 'text-amber' }
+  if (/tagihan|internet|listrik|kost|kos/i.test(name)) return { bg: 'bg-blue-soft', fg: 'text-blue' }
+  return { bg: 'bg-expense-soft', fg: 'text-expense' }
 }
 
 export function TransactionList({ transactions, onEdit }: TransactionListProps) {
@@ -40,7 +54,7 @@ export function TransactionList({ transactions, onEdit }: TransactionListProps) 
     return (
       <EmptyState
         title="Belum ada transaksi"
-        description="Ketuk tombol + Tambah buat nyatet pemasukan atau pengeluaran pertama kamu."
+        description="Ketuk tombol + di bawah buat nyatet pemasukan atau pengeluaran pertama kamu."
       />
     )
   }
@@ -59,7 +73,7 @@ export function TransactionList({ transactions, onEdit }: TransactionListProps) 
 
   return (
     <>
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-4">
         {groupByDate(transactions).map(([date, items]) => {
           // transfers net to zero across your own accounts, so they're left out
           const dayTotal = items.reduce((sum, t) => {
@@ -67,75 +81,68 @@ export function TransactionList({ transactions, onEdit }: TransactionListProps) 
             if (t.type === 'expense') return sum - t.amount
             return sum
           }, 0)
+
           return (
-            <div key={date}>
-              <div className="mb-2 flex items-baseline justify-between">
-                <p className="text-xs font-medium uppercase tracking-wide text-white/40">
+            <div key={date} className="flex flex-col gap-2">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-subtle">
                   {dateHeading(date)}
-                </p>
-                <p
-                  className={`text-xs font-medium tabular-nums ${
-                    dayTotal >= 0 ? 'text-emerald-400/70' : 'text-white/40'
-                  }`}
-                >
+                </span>
+                <span className="nums text-[11px] font-bold text-subtle">
                   {dayTotal >= 0 ? '+' : '−'}
                   {formatIDR(Math.abs(dayTotal))}
-                </p>
+                </span>
               </div>
+
               <div className="flex flex-col gap-2">
-                {items.map((t) => (
-                  <div
-                    key={t.id}
-                    className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3.5 py-3"
-                  >
-                    <span
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm"
-                      style={{
-                        backgroundColor:
-                          (t.type === 'transfer'
-                            ? (t.account?.color ?? '#6366f1')
-                            : (t.category?.color ?? '#6366f1')) + '33',
-                      }}
+                {items.map((t) => {
+                  const Icon = t.type === 'transfer' ? TransferIcon : iconForCategory(t.category?.name)
+                  const tint = tintFor(t)
+                  return (
+                    <div
+                      key={t.id}
+                      className="flex items-center gap-3 rounded-[18px] border border-line bg-surface px-3.5 py-3"
                     >
-                      {t.type === 'income' ? '↑' : t.type === 'expense' ? '↓' : '⇄'}
-                    </span>
-                    <button className="min-w-0 flex-1 text-left" onClick={() => onEdit(t)}>
-                      <p className="truncate text-sm font-medium text-white">
-                        {t.type === 'transfer'
-                          ? `${t.account?.name ?? '?'} → ${t.to_account?.name ?? '?'}`
-                          : (t.category?.name ?? 'Tanpa kategori')}
-                      </p>
-                      <p className="truncate text-xs text-white/40">
-                        {t.type !== 'transfer' && t.account && (
-                          <span className="text-white/50">{t.account.name}</span>
-                        )}
-                        {t.type !== 'transfer' && t.account && t.description && ' · '}
-                        {t.description}
-                      </p>
-                    </button>
-                    <div className="flex shrink-0 items-center gap-2">
                       <span
-                        className={`text-sm font-semibold tabular-nums ${
-                          t.type === 'income'
-                            ? 'text-emerald-400'
-                            : t.type === 'transfer'
-                              ? 'text-sky-400'
-                              : 'text-white/80'
+                        className={`flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-xl ${tint.bg} ${tint.fg}`}
+                      >
+                        <Icon size={16} />
+                      </span>
+
+                      <button className="min-w-0 flex-1 text-left" onClick={() => onEdit(t)}>
+                        <p className="truncate text-sm font-bold text-content">
+                          {t.type === 'transfer'
+                            ? `${t.account?.name ?? '?'} → ${t.to_account?.name ?? '?'}`
+                            : (t.description || t.category?.name || 'Tanpa kategori')}
+                        </p>
+                        <p className="truncate text-[11px] text-subtle">
+                          {t.type === 'transfer'
+                            ? 'Transfer · antar rekening'
+                            : [t.category?.name ?? 'Tanpa kategori', t.account?.name]
+                                .filter(Boolean)
+                                .join(' · ')}
+                        </p>
+                      </button>
+
+                      <span
+                        className={`nums shrink-0 text-sm font-extrabold ${
+                          t.type === 'transfer' ? 'text-subtle' : 'text-content'
                         }`}
                       >
-                        {t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '−'}
-                        {formatIDR(t.amount)}
+                        {t.type === 'income' ? '+' : t.type === 'expense' ? '−' : ''}
+                        {formatIDR(t.amount).replace(/^Rp\s?/, '')}
                       </span>
+
                       <button
                         onClick={() => setPendingDelete(t)}
                         aria-label={`Hapus transaksi ${t.category?.name ?? ''}`}
-                        className="rounded-lg p-1.5 text-white/30 hover:bg-red-500/10 hover:text-red-400"
+                        className="-mr-1 shrink-0 rounded-lg p-1.5 text-faint hover:bg-expense-soft hover:text-expense"
                       >
-                        ✕
+                        <X size={14} />
                       </button>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )

@@ -1,14 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { Plus } from 'lucide-react'
 import { useCategories, useDeleteCategory } from '../hooks/useCategories'
 import { useBudgets, useSetBudget } from '../hooks/useBudgets'
 import { useTransactions } from '../hooks/useTransactions'
+import { usePayPeriods } from '../hooks/usePayPeriods'
+import { useToast } from '../hooks/useToast'
+import { useRegisterAddAction } from '../hooks/useAddAction'
 import { BudgetCard } from '../components/BudgetCard'
 import { AddPotForm } from '../components/AddPotForm'
-import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { LoadingBlock, ErrorBanner } from '../components/ui/Feedback'
-import { useToast } from '../hooks/useToast'
-import { usePayPeriods } from '../hooks/usePayPeriods'
+import { Modal } from '../components/ui/Modal'
 import { formatDateShort, formatIDR } from '../lib/format'
 import type { Category } from '../types'
 
@@ -28,6 +30,9 @@ export default function Budgets() {
 
   const [addingPot, setAddingPot] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<Category | null>(null)
+
+  const openAdd = useCallback(() => setAddingPot(true), [])
+  useRegisterAddAction(openAdd)
 
   async function handleConfirmDelete() {
     if (!pendingDelete) return
@@ -60,46 +65,72 @@ export default function Budgets() {
 
   const totalAllocated = Array.from(budgetByCategory.values()).reduce((a, b) => a + b, 0)
   const totalSpent = Array.from(spentByCategory.values()).reduce((a, b) => a + b, 0)
+  const pct = totalAllocated > 0 ? Math.min(100, Math.round((totalSpent / totalAllocated) * 100)) : 0
+
+  // pots with a jatah first, then the untouched ones
+  const sorted = useMemo(
+    () =>
+      [...expenseCategories].sort((a, b) => {
+        const aHas = (budgetByCategory.get(a.id) ?? 0) > 0 ? 1 : 0
+        const bHas = (budgetByCategory.get(b.id) ?? 0) > 0 ? 1 : 0
+        if (aHas !== bHas) return bHas - aHas
+        return a.name.localeCompare(b.name)
+      }),
+    [expenseCategories, budgetByCategory],
+  )
 
   const isLoading = categoriesLoading || txLoading
   const isError = categoriesError || txError
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">Pot Anggaran</h2>
-        {!addingPot && (
-          <Button onClick={() => setAddingPot(true)} className="!px-3 !py-2 text-xs">
-            + Pot baru
-          </Button>
-        )}
-      </div>
-      <p className="text-sm text-white/40">
-        Set jatah per periode gaji — sisa & progress-nya update otomatis tiap kamu nambah
-        transaksi. Jatah bisa diubah kapan aja, dan pot bisa dihapus kalau udah gak kepake.
-      </p>
-
-      {addingPot && <AddPotForm onDone={() => setAddingPot(false)} />}
+      <header className="flex items-start justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-[22px] font-extrabold tracking-tight text-content">Pot</h1>
+          <p className="text-[13px] text-muted">Sisihkan dulu, baru dipakai.</p>
+        </div>
+        <button
+          onClick={() => setAddingPot(true)}
+          aria-label="Pot baru"
+          className="flex h-[38px] w-[38px] items-center justify-center rounded-[13px] border border-line-input bg-surface text-label"
+        >
+          <Plus size={17} />
+        </button>
+      </header>
 
       {isLoading && <LoadingBlock />}
       {isError && <ErrorBanner message="Gagal memuat pot anggaran. Coba sebentar lagi." />}
 
       {!isLoading && !isError && (
         <>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="flex items-baseline justify-between text-sm">
-              <span className="text-white/50">Terpakai {cycle.label}</span>
-              <span className="font-medium text-white">
-                {formatIDR(totalSpent)} / {formatIDR(totalAllocated)}
+          <section className="flex flex-col gap-2.5 rounded-[22px] border border-accent-line bg-accent-soft p-[18px]">
+            <span className="text-xs font-bold text-label">Terpakai {cycle.label}</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-sm font-bold text-label">Rp</span>
+              <span className="nums text-[28px] font-extrabold leading-none text-content">
+                {formatIDR(totalSpent).replace(/^Rp\s?/, '')}
               </span>
             </div>
-            <p className="mt-1 text-xs text-white/30">
+            {totalAllocated > 0 && (
+              <div className="h-2.5 overflow-hidden rounded-full bg-surface">
+                <div
+                  className="h-full rounded-full bg-accent transition-all"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            )}
+            <span className="text-xs text-label">
+              {totalAllocated > 0
+                ? `dari jatah ${formatIDR(totalAllocated)} · ${pct}% jalan`
+                : 'belum ada jatah yang diset'}
+            </span>
+            <span className="text-[11px] text-label/70">
               {formatDateShort(cycle.start)} – {formatDateShort(cycle.end)}
-            </p>
-          </div>
+            </span>
+          </section>
 
-          <div className="flex flex-col gap-3">
-            {expenseCategories.map((c) => (
+          <div className="flex flex-col gap-2.5">
+            {sorted.map((c) => (
               <BudgetCard
                 key={c.id}
                 category={c}
@@ -115,12 +146,16 @@ export default function Budgets() {
         </>
       )}
 
+      <Modal open={addingPot} onClose={() => setAddingPot(false)} title="Pot baru">
+        <AddPotForm onDone={() => setAddingPot(false)} />
+      </Modal>
+
       <ConfirmDialog
         open={pendingDelete !== null}
         title="Hapus pot ini?"
         message={
           pendingDelete
-            ? `Pot "${pendingDelete.name}" dan jatah bulanannya akan dihapus. Transaksi lama yang pakai kategori ini tetap tersimpan, tapi jadi tanpa kategori.`
+            ? `Pot "${pendingDelete.name}" dan jatahnya akan dihapus. Transaksi lama yang pakai kategori ini tetap tersimpan, tapi jadi tanpa kategori.`
             : ''
         }
         busy={deleteCategory.isPending}

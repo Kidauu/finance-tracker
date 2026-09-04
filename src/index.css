@@ -1,5 +1,139 @@
 @import "tailwindcss";
 
+/*
+ * Option 1A "Kartu Tenang" — warm neutral, one green accent.
+ * Light values come from the 1a artboards, dark from the "1a · Dark" artboard.
+ */
+:root {
+  --bg: #f6f5f2;
+  --surface: #ffffff;
+  --surface-alt: #edebe5;
+  --border: #e9e6de;
+  --border-strong: #dcd9d0;
+  --border-input: #e4e1d8;
+
+  --text: #1b1b1a;
+  --text-label: #6e6b63;
+  --text-muted: #8a8a80;
+  --text-subtle: #9a978e;
+  --text-faint: #a8a59c;
+
+  --accent: #2f7a5b;
+  --accent-soft: #eff3f0;
+  --accent-soft-2: #f3f6f4;
+  --accent-border: #dfe7e2;
+  --on-accent: #ffffff;
+
+  --expense: #c4593f;
+  --expense-soft: #faf2ef;
+  --amber: #e8a13a;
+  --amber-soft: #f5f0e6;
+  --blue: #5b8def;
+  --blue-soft: #eef3fb;
+
+  --ink: #1b1b1a;
+  --on-ink: #ffffff;
+  --track: #f0eee8;
+
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, sans-serif;
+}
+
+:root:not([data-theme="light"]) {
+  @media (prefers-color-scheme: dark) {
+    --bg: #14161a;
+    --surface: #1c1f24;
+    --surface-alt: #1c1f24;
+    --border: #2a2e35;
+    --border-strong: #2a2e35;
+    --border-input: #2a2e35;
+
+    --text: #f0efea;
+    --text-label: #b9bcc2;
+    --text-muted: #8c8f96;
+    --text-subtle: #787c83;
+    --text-faint: #787c83;
+
+    --accent: #6fbf97;
+    --accent-soft: #1e2a24;
+    --accent-soft-2: #1a231e;
+    --accent-border: #2a3a31;
+    --on-accent: #0f1512;
+
+    --expense: #e08a6c;
+    --expense-soft: #241d1a;
+    --amber: #c9c36a;
+    --amber-soft: #20241b;
+    --blue: #7ea6f0;
+    --blue-soft: #1a2029;
+
+    --ink: #f0efea;
+    --on-ink: #14161a;
+    --track: #2a2e35;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #14161a;
+  --surface: #1c1f24;
+  --surface-alt: #1c1f24;
+  --border: #2a2e35;
+  --border-strong: #2a2e35;
+  --border-input: #2a2e35;
+
+  --text: #f0efea;
+  --text-label: #b9bcc2;
+  --text-muted: #8c8f96;
+  --text-subtle: #787c83;
+  --text-faint: #787c83;
+
+  --accent: #6fbf97;
+  --accent-soft: #1e2a24;
+  --accent-soft-2: #1a231e;
+  --accent-border: #2a3a31;
+  --on-accent: #0f1512;
+
+  --expense: #e08a6c;
+  --expense-soft: #241d1a;
+  --amber: #c9c36a;
+  --amber-soft: #20241b;
+  --blue: #7ea6f0;
+  --blue-soft: #1a2029;
+
+  --ink: #f0efea;
+  --on-ink: #14161a;
+  --track: #2a2e35;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-line-input: var(--border-input);
+  --color-ink: var(--ink);
+  --color-on-ink: var(--on-ink);
+  --color-content: var(--text);
+  --color-label: var(--text-label);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-faint: var(--text-faint);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-soft2: var(--accent-soft-2);
+  --color-accent-line: var(--accent-border);
+  --color-on-accent: var(--on-accent);
+  --color-expense: var(--expense);
+  --color-expense-soft: var(--expense-soft);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --color-blue: var(--blue);
+  --color-blue-soft: var(--blue-soft);
+  --color-track: var(--track);
+  --font-sans: var(--font-sans);
+}
+
 html,
 body,
 #root {
@@ -8,10 +142,12 @@ body,
 
 body {
   margin: 0;
-  background-color: #0f0f1a;
-  color: #f4f4f6;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overscroll-behavior-y: none;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 /* iOS safe-area padding for standalone PWA mode */
@@ -20,4 +156,10 @@ body {
 }
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* the design sets tabular figures on every amount */
+.nums {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }

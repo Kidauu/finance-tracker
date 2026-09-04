@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { CalendarDays, ChevronDown, Pencil } from 'lucide-react'
 import { useCategories } from '../hooks/useCategories'
 import { useAccounts } from '../hooks/useAccounts'
 import { useAddTransaction, useUpdateTransaction } from '../hooks/useTransactions'
@@ -6,7 +7,8 @@ import { useToast } from '../hooks/useToast'
 import { Button } from './ui/Button'
 import { Input, Label, Select } from './ui/Input'
 import { CurrencyInput } from './ui/CurrencyInput'
-import { formatDateShort, todayISO } from '../lib/format'
+import { formatDateShort, formatIDR, todayISO } from '../lib/format'
+import { iconForCategory } from '../lib/categoryIcons'
 import type { TransactionType, TransactionWithCategory } from '../types'
 
 interface TransactionFormPrefill {
@@ -58,6 +60,7 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
   const [toAccountId, setToAccountId] = useState(transaction?.to_account_id ?? '')
   const [date, setDate] = useState(transaction?.transaction_date ?? prefill?.date ?? todayISO())
   const [description, setDescription] = useState(transaction?.description ?? '')
+  const [showAllCategories, setShowAllCategories] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const isTransfer = type === 'transfer'
@@ -70,12 +73,17 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
     { label: 'Kemarin', value: yesterdayISO() },
   ]
 
+  // the design shows a compact icon grid; the rest stay behind "Lainnya"
+  const QUICK_COUNT = 7
+  const visibleCategories = showAllCategories
+    ? filteredCategories
+    : filteredCategories.slice(0, QUICK_COUNT)
+
   function handleTypeChange(next: TransactionType) {
     setType(next)
     setCategoryId('')
     if (next !== 'transfer') setToAccountId('')
     else if (accounts && accounts.length > 1) {
-      // preselect a destination that isn't the source
       const other = accounts.find((a) => a.id !== accountId)
       if (other) setToAccountId(other.id)
     }
@@ -138,19 +146,19 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       {prefill?.note && (
-        <p className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3.5 py-2.5 text-sm text-indigo-200">
+        <p className="rounded-2xl bg-accent-soft px-4 py-3 text-[13px] leading-relaxed text-accent">
           {prefill.note}
         </p>
       )}
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="flex gap-1.5 rounded-2xl bg-surface-alt p-1.5">
         {(['expense', 'income', 'transfer'] as const).map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => handleTypeChange(t)}
-            className={`rounded-xl py-2.5 text-sm font-medium transition-colors ${
-              type === t ? 'bg-indigo-600 text-white' : 'bg-white/5 text-white/50'
+            className={`flex-1 rounded-xl py-2.5 text-xs font-bold transition-colors ${
+              type === t ? 'bg-surface text-content shadow-sm' : 'text-muted'
             }`}
           >
             {TYPE_LABELS[t]}
@@ -158,114 +166,178 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
         ))}
       </div>
 
-      <div>
-        <Label htmlFor="amount">Jumlah</Label>
-        <CurrencyInput id="amount" value={amount} onChange={setAmount} autoFocus required />
-      </div>
+      <CurrencyInput
+        id="amount"
+        value={amount}
+        onChange={setAmount}
+        autoFocus
+        required
+        hero
+        heroLabel="Berapa?"
+      />
 
-      <div>
-        <Label htmlFor="account">{isTransfer ? 'Dari rekening' : 'Rekening'}</Label>
-        <Select id="account" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-          {!isTransfer && <option value="">Tanpa rekening</option>}
-          {(accounts ?? []).map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </Select>
-      </div>
-
-      {isTransfer && (
-        <div>
-          <Label htmlFor="to-account">Ke rekening</Label>
-          <Select
-            id="to-account"
-            value={toAccountId}
-            onChange={(e) => setToAccountId(e.target.value)}
-          >
-            <option value="">Pilih rekening tujuan</option>
-            {(accounts ?? [])
-              .filter((a) => a.id !== accountId)
-              .map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-          </Select>
-          <p className="mt-1.5 text-xs text-white/40">
-            Transfer cuma mindahin saldo antar rekening — gak dihitung sebagai pemasukan atau
-            pengeluaran.
-          </p>
+      {!isTransfer && filteredCategories.length > 0 && (
+        <div className="flex flex-col gap-2.5">
+          <Label className="mb-0">Kategori</Label>
+          <div className="grid grid-cols-4 gap-2">
+            {visibleCategories.map((c) => {
+              const Icon = iconForCategory(c.name)
+              const selected = categoryId === c.id
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setCategoryId(selected ? '' : c.id)}
+                  style={
+                    selected ? { borderColor: c.color, color: c.color } : undefined
+                  }
+                  className={`flex flex-col items-center gap-1.5 rounded-2xl px-1 py-3 transition-colors ${
+                    selected
+                      ? 'border-[1.5px] bg-surface-alt'
+                      : 'border border-line bg-surface text-muted'
+                  }`}
+                >
+                  <Icon size={17} />
+                  <span className="w-full truncate px-1 text-[10px] font-semibold leading-tight">
+                    {c.name}
+                  </span>
+                </button>
+              )
+            })}
+            {!showAllCategories && filteredCategories.length > QUICK_COUNT && (
+              <button
+                type="button"
+                onClick={() => setShowAllCategories(true)}
+                className="flex flex-col items-center gap-1.5 rounded-2xl border border-line bg-surface px-1 py-3 text-muted"
+              >
+                <ChevronDown size={17} />
+                <span className="text-[10px] font-semibold leading-tight">Lainnya</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
 
-      {!isTransfer && (
-        <div>
-          <Label htmlFor="category">Kategori</Label>
-          <Select id="category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-            <option value="">Tanpa kategori</option>
-            {filteredCategories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
+      <div className="flex gap-2.5">
+        <div className="flex flex-1 flex-col gap-1.5 rounded-2xl border border-line bg-surface px-3.5 py-3">
+          <span className="text-[11px] font-bold text-muted">
+            {isTransfer ? 'Dari rekening' : 'Rekening'}
+          </span>
+          <Select
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+            className="!h-auto !rounded-none !border-0 !bg-transparent !p-0 !text-[13px] !font-bold"
+          >
+            {!isTransfer && <option value="">Tanpa rekening</option>}
+            {(accounts ?? []).map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
               </option>
             ))}
           </Select>
         </div>
-      )}
 
-      <div>
-        <div className="mb-1.5 flex items-baseline justify-between">
-          <Label htmlFor="date" className="mb-0">
-            Tanggal
-          </Label>
-          <div className="flex gap-1.5">
-            {dateShortcuts.map((s) => (
-              <button
-                key={s.value}
-                type="button"
-                onClick={() => setDate(s.value)}
-                className={`rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                  date === s.value
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-white/5 text-white/50 hover:text-white/80'
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
+        {isTransfer ? (
+          <div className="flex flex-1 flex-col gap-1.5 rounded-2xl border border-line bg-surface px-3.5 py-3">
+            <span className="text-[11px] font-bold text-muted">Ke rekening</span>
+            <Select
+              value={toAccountId}
+              onChange={(e) => setToAccountId(e.target.value)}
+              className="!h-auto !rounded-none !border-0 !bg-transparent !p-0 !text-[13px] !font-bold"
+            >
+              <option value="">Pilih…</option>
+              {(accounts ?? [])
+                .filter((a) => a.id !== accountId)
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+            </Select>
           </div>
-        </div>
-        <Input
-          id="date"
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          required
-        />
-        {date && date !== today && (
-          <p className="mt-1.5 text-xs text-white/40">{formatDateShort(date)}</p>
+        ) : (
+          <div className="flex flex-1 flex-col gap-1.5 rounded-2xl border border-line bg-surface px-3.5 py-3">
+            <span className="flex items-center justify-between text-[11px] font-bold text-muted">
+              Tanggal
+              <CalendarDays size={13} className="text-faint" />
+            </span>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+              className="w-full border-0 bg-transparent p-0 text-[13px] font-bold text-content outline-none"
+            />
+          </div>
         )}
       </div>
 
-      <div>
-        <Label htmlFor="description">Catatan</Label>
+      {isTransfer && (
+        <>
+          <div className="flex flex-col gap-1.5 rounded-2xl border border-line bg-surface px-3.5 py-3">
+            <span className="flex items-center justify-between text-[11px] font-bold text-muted">
+              Tanggal
+              <CalendarDays size={13} className="text-faint" />
+            </span>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+              className="w-full border-0 bg-transparent p-0 text-[13px] font-bold text-content outline-none"
+            />
+          </div>
+          <p className="-mt-1 text-[11px] leading-relaxed text-muted">
+            Transfer cuma mindahin saldo antar rekening — gak dihitung sebagai pemasukan atau
+            pengeluaran.
+          </p>
+        </>
+      )}
+
+      <div className="flex gap-1.5">
+        {dateShortcuts.map((s) => (
+          <button
+            key={s.value}
+            type="button"
+            onClick={() => setDate(s.value)}
+            className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors ${
+              date === s.value ? 'bg-accent text-on-accent' : 'bg-surface-alt text-muted'
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+        {date !== today && (
+          <span className="self-center px-1 text-[11px] text-faint">{formatDateShort(date)}</span>
+        )}
+      </div>
+
+      <div className="relative">
+        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-faint">
+          <Pencil size={15} />
+        </span>
         <Input
           id="description"
           type="text"
-          placeholder="Opsional"
+          placeholder="Catatan singkat (opsional)"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
+          className="!h-12 !border-dashed !pl-11 !text-[13px]"
         />
       </div>
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && <p className="text-[13px] font-medium text-expense">{error}</p>}
 
-      <div className="mt-1 flex gap-2">
+      <div className="mt-1 flex gap-2.5">
         <Button type="button" variant="secondary" onClick={onCancel} className="flex-1">
           Batal
         </Button>
-        <Button type="submit" disabled={isSaving} className="flex-1">
-          {isSaving ? 'Menyimpan…' : transaction ? 'Simpan perubahan' : 'Simpan'}
+        <Button type="submit" disabled={isSaving} className="flex-[1.4] !h-[54px] !py-0">
+          {isSaving
+            ? 'Menyimpan…'
+            : Number(amount) > 0
+              ? `Simpan · ${formatIDR(Number(amount))}`
+              : 'Simpan'}
         </Button>
       </div>
     </form>
