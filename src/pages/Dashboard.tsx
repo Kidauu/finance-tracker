@@ -25,6 +25,8 @@ interface Prefill {
   type: TransactionType
   categoryId?: string
   accountId?: string
+  toAccountId?: string
+  lockTransferAccounts?: boolean
   date?: string
   note?: string
 }
@@ -47,6 +49,10 @@ export default function Dashboard() {
   const { months, gajiCategory, unrecordedPastCount } = usePaydayHistory()
   const { balances, totalBalance } = useAccountBalances()
   const { signOut } = useAuth()
+  const cashAccount = balances.find((b) => b.account.name.trim().toLowerCase() === 'cash')?.account
+  const bcaAccount =
+    balances.find((b) => b.account.name.trim().toLowerCase() === 'bca')?.account ??
+    balances.find((b) => b.account.is_payroll)?.account
 
   const [formOpen, setFormOpen] = useState(false)
   const [holidaysOpen, setHolidaysOpen] = useState(false)
@@ -104,6 +110,20 @@ export default function Dashboard() {
   function openTransfer() {
     setEditing(undefined)
     setPrefill({ type: 'transfer' })
+    setFormOpen(true)
+  }
+
+  function openCashWithdrawal() {
+    if (!bcaAccount || !cashAccount) return
+
+    setEditing(undefined)
+    setPrefill({
+      type: 'transfer',
+      accountId: bcaAccount.id,
+      toAccountId: cashAccount.id,
+      lockTransferAccounts: true,
+      note: 'Penarikan tunai dari BCA ke Cash. Ini memindahkan saldo, bukan pengeluaran.',
+    })
     setFormOpen(true)
   }
 
@@ -185,6 +205,7 @@ export default function Dashboard() {
             totalBalance={totalBalance}
             onManage={() => setAccountsOpen(true)}
             onTransfer={openTransfer}
+            onCashWithdrawal={bcaAccount && cashAccount ? openCashWithdrawal : undefined}
           />
 
           <PaydayPanel

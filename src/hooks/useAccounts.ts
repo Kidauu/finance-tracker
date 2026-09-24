@@ -2,7 +2,12 @@ import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useTransactions } from './useTransactions'
-import type { Account, AccountBalance, NewAccount } from '../types'
+import type {
+  Account,
+  AccountBalance,
+  AccountReconciliation,
+  NewAccount,
+} from '../types'
 
 export function useAccounts() {
   return useQuery({
@@ -82,6 +87,49 @@ export function useDeleteAccount() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
+    },
+  })
+}
+
+export function useAccountReconciliations(accountId: string | null) {
+  return useQuery({
+    queryKey: ['account-reconciliations', accountId],
+    enabled: Boolean(accountId),
+    queryFn: async (): Promise<AccountReconciliation[]> => {
+      const { data, error } = await supabase
+        .from('account_reconciliations')
+        .select('*')
+        .eq('account_id', accountId!)
+        .order('reconciled_at', { ascending: false })
+      if (error) throw error
+      return data as AccountReconciliation[]
+    },
+  })
+}
+
+export function useReconcileAccount() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      accountId,
+      actualBalance,
+    }: {
+      accountId: string
+      actualBalance: number
+    }) => {
+      const { data, error } = await supabase.rpc('reconcile_account', {
+        p_account_id: accountId,
+        p_actual_balance: actualBalance,
+      })
+      if (error) throw error
+      return data as AccountReconciliation
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({
+        queryKey: ['account-reconciliations', variables.accountId],
+      })
     },
   })
 }

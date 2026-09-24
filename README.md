@@ -9,6 +9,16 @@ Personal income/expense tracker, installable as a PWA on iPhone. React + TypeScr
 
 ## What you still need to do (requires your own accounts — I can't create these for you)
 
+### Applying later database changes
+
+For an already-running project, execute every new file in `supabase/` whose
+number is higher than the last migration you applied, in order, using the
+Supabase SQL editor. To add the Cash account, run
+[`supabase/migration_005_cash_account.sql`](supabase/migration_005_cash_account.sql).
+It safely creates a zero-balance Cash account once per user. Record every ATM
+withdrawal as **BCA → Cash**; then select **Cash** when recording a cash
+expense.
+
 ### 1. Create the Supabase project
 1. Go to [supabase.com](https://supabase.com) and create a new project.
 2. Open the SQL editor and run [`supabase/schema.sql`](supabase/schema.sql) (same SQL as the brief, section 3).

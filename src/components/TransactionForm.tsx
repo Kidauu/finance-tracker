@@ -1,20 +1,24 @@
-import { useState, type FormEvent } from 'react'
-import { CalendarDays, ChevronDown, Pencil } from 'lucide-react'
+import { useMemo, useState, type FormEvent } from 'react'
+import { CalendarDays, ChevronDown, Pencil, TriangleAlert } from 'lucide-react'
 import { useCategories } from '../hooks/useCategories'
-import { useAccounts } from '../hooks/useAccounts'
+import { useAccountBalances, useAccounts } from '../hooks/useAccounts'
 import { useAddTransaction, useUpdateTransaction } from '../hooks/useTransactions'
 import { useToast } from '../hooks/useToast'
 import { Button } from './ui/Button'
+import { ConfirmDialog } from './ui/ConfirmDialog'
 import { Input, Label, Select } from './ui/Input'
 import { CurrencyInput } from './ui/CurrencyInput'
 import { formatDateShort, formatIDR, todayISO } from '../lib/format'
 import { iconForCategory } from '../lib/categoryIcons'
-import type { TransactionType, TransactionWithCategory } from '../types'
+import type { NewTransaction, TransactionType, TransactionWithCategory } from '../types'
 
 interface TransactionFormPrefill {
   type?: TransactionType
   categoryId?: string
   accountId?: string
+  toAccountId?: string
+  /** keeps a purpose-built transfer, such as an ATM withdrawal, on its intended route */
+  lockTransferAccounts?: boolean
   date?: string
   /** shown above the form when the context isn't obvious, e.g. backfilling a past payday */
   note?: string
@@ -39,9 +43,36 @@ function yesterdayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+interface BalanceChange {
+  type: TransactionType
+  amount: number
+  account_id: string | null
+  to_account_id: string | null
+}
+
+/** Adds (or reverses) a transaction's effect on the affected account balances. */
+function applyBalanceChange(
+  balances: Map<string, number>,
+  transaction: BalanceChange,
+  direction: 1 | -1,
+) {
+  const amount = transaction.amount * direction
+  const change = (id: string | null, delta: number) => {
+    if (id && balances.has(id)) balances.set(id, (balances.get(id) ?? 0) + delta)
+  }
+
+  if (transaction.type === 'income') change(transaction.account_id, amount)
+  else if (transaction.type === 'expense') change(transaction.account_id, -amount)
+  else {
+    change(transaction.account_id, -amount)
+    change(transaction.to_account_id, amount)
+  }
+}
+
 export function TransactionForm({ transaction, prefill, onSaved, onCancel }: TransactionFormProps) {
   const { data: categories } = useCategories()
   const { data: accounts } = useAccounts()
+  const { balances } = useAccountBalances()
   const addTransaction = useAddTransaction()
   const updateTransaction = useUpdateTransaction()
   const { showToast } = useToast()
@@ -57,15 +88,52 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
   const [amount, setAmount] = useState(transaction ? String(Math.round(transaction.amount)) : '')
   const [categoryId, setCategoryId] = useState(transaction?.category_id ?? prefill?.categoryId ?? '')
   const [accountId, setAccountId] = useState(defaultAccountId)
-  const [toAccountId, setToAccountId] = useState(transaction?.to_account_id ?? '')
+  const [toAccountId, setToAccountId] = useState(
+    transaction?.to_account_id ?? prefill?.toAccountId ?? '',
+  )
   const [date, setDate] = useState(transaction?.transaction_date ?? prefill?.date ?? todayISO())
   const [description, setDescription] = useState(transaction?.description ?? '')
   const [showAllCategories, setShowAllCategories] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [overdraftConfirmOpen, setOverdraftConfirmOpen] = useState(false)
 
   const isTransfer = type === 'transfer'
+  const transferAccountsLocked =
+    isTransfer && prefill?.lockTransferAccounts === true && transaction === undefined
   const filteredCategories = (categories ?? []).filter((c) => c.type === type)
   const isSaving = addTransaction.isPending || updateTransaction.isPending
+
+  /**
+   * A draft is simulated against the live balances. When editing, we first
+   * undo the saved transaction so an unchanged record never warns falsely.
+   */
+  const overdrawnAccounts = useMemo(() => {
+    const projected = new Map(balances.map((b) => [b.account.id, b.balance]))
+    if (transaction) applyBalanceChange(projected, transaction, -1)
+
+    const numericAmount = Number(amount)
+    if (numericAmount > 0) {
+      applyBalanceChange(
+        projected,
+        {
+          type,
+          amount: numericAmount,
+          account_id: accountId || null,
+          to_account_id: isTransfer ? toAccountId || null : null,
+        },
+        1,
+      )
+    }
+
+    // Only flag balances that this draft would lower. An unrelated account
+    // that was already negative should not block a new transaction elsewhere.
+    return balances.flatMap((b) => {
+      const next = projected.get(b.account.id) ?? b.balance
+      return next < 0 && next < b.balance
+        ? [{ account: b.account, projectedBalance: next }]
+        : []
+    })
+  }, [accountId, amount, balances, isTransfer, toAccountId, transaction, type])
 
   const today = todayISO()
   const dateShortcuts = [
@@ -89,7 +157,40 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
     }
   }
 
-  async function handleSubmit(e: FormEvent) {
+  function payloadFor(numericAmount: number): NewTransaction {
+    return {
+      type,
+      amount: numericAmount,
+      category_id: isTransfer ? null : categoryId || null,
+      account_id: accountId || null,
+      to_account_id: isTransfer ? toAccountId : null,
+      transaction_date: date,
+      description: description || null,
+    }
+  }
+
+  async function saveTransaction(payload: NewTransaction) {
+    try {
+      if (transaction) {
+        await updateTransaction.mutateAsync({ id: transaction.id, ...payload })
+        showToast('Transaksi diperbarui')
+      } else {
+        await addTransaction.mutateAsync(payload)
+        showToast(
+          isTransfer
+            ? 'Transfer dicatat'
+            : type === 'income'
+              ? 'Pemasukan dicatat'
+              : 'Pengeluaran dicatat',
+        )
+      }
+      onSaved()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ada yang salah, coba lagi')
+    }
+  }
+
+  function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
 
@@ -113,34 +214,12 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
       }
     }
 
-    try {
-      const payload = {
-        type,
-        amount: numericAmount,
-        category_id: isTransfer ? null : categoryId || null,
-        account_id: accountId || null,
-        to_account_id: isTransfer ? toAccountId : null,
-        transaction_date: date,
-        description: description || null,
-      }
-
-      if (transaction) {
-        await updateTransaction.mutateAsync({ id: transaction.id, ...payload })
-        showToast('Transaksi diperbarui')
-      } else {
-        await addTransaction.mutateAsync(payload)
-        showToast(
-          isTransfer
-            ? 'Transfer dicatat'
-            : type === 'income'
-              ? 'Pemasukan dicatat'
-              : 'Pengeluaran dicatat',
-        )
-      }
-      onSaved()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ada yang salah, coba lagi')
+    if (overdrawnAccounts.length > 0) {
+      setOverdraftConfirmOpen(true)
+      return
     }
+
+    void saveTransaction(payloadFor(numericAmount))
   }
 
   return (
@@ -226,6 +305,7 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
           <Select
             value={accountId}
             onChange={(e) => setAccountId(e.target.value)}
+            disabled={transferAccountsLocked}
             className="!h-auto !rounded-none !border-0 !bg-transparent !p-0 !text-[13px] !font-bold"
           >
             {!isTransfer && <option value="">Tanpa rekening</option>}
@@ -243,6 +323,7 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
             <Select
               value={toAccountId}
               onChange={(e) => setToAccountId(e.target.value)}
+              disabled={transferAccountsLocked}
               className="!h-auto !rounded-none !border-0 !bg-transparent !p-0 !text-[13px] !font-bold"
             >
               <option value="">Pilih…</option>
@@ -328,6 +409,20 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
 
       {error && <p className="text-[13px] font-medium text-expense">{error}</p>}
 
+      {overdrawnAccounts.length > 0 && (
+        <div className="flex gap-2.5 rounded-2xl bg-expense-soft px-3.5 py-3 text-[12px] leading-relaxed text-expense">
+          <TriangleAlert size={16} className="mt-0.5 shrink-0" />
+          <p>
+            {overdrawnAccounts
+              .map(
+                (b) =>
+                  b.account.name + ' akan menjadi ' + formatIDR(b.projectedBalance),
+              )
+              .join('. ')}
+          </p>
+        </div>
+      )}
+
       <div className="mt-1 flex gap-2.5">
         <Button type="button" variant="secondary" onClick={onCancel} className="flex-1">
           Batal
@@ -340,6 +435,26 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
               : 'Simpan'}
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={overdraftConfirmOpen}
+        title="Saldo rekening akan minus"
+        message={
+          overdrawnAccounts.length === 1
+            ? 'Saldo ' +
+              overdrawnAccounts[0].account.name +
+              ' tidak cukup untuk transaksi ini. Tetap simpan kalau saldo di aplikasi memang belum disesuaikan.'
+            : 'Ada saldo rekening yang tidak cukup untuk transaksi ini. Tetap simpan kalau saldo di aplikasi memang belum disesuaikan.'
+        }
+        confirmLabel="Tetap simpan"
+        destructive={false}
+        busy={isSaving}
+        onConfirm={() => {
+          setOverdraftConfirmOpen(false)
+          void saveTransaction(payloadFor(Number(amount)))
+        }}
+        onCancel={() => setOverdraftConfirmOpen(false)}
+      />
     </form>
   )
 }

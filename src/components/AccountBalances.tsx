@@ -1,4 +1,4 @@
-import { ArrowLeftRight } from 'lucide-react'
+import { ArrowLeftRight, Banknote } from 'lucide-react'
 import { formatIDR } from '../lib/format'
 import { iconForAccount } from '../lib/categoryIcons'
 import type { AccountBalance } from '../types'
@@ -8,6 +8,7 @@ interface AccountBalancesProps {
   totalBalance: number
   onManage: () => void
   onTransfer: () => void
+  onCashWithdrawal?: () => void
 }
 
 const TINTS = [
@@ -22,6 +23,7 @@ export function AccountBalances({
   totalBalance,
   onManage,
   onTransfer,
+  onCashWithdrawal,
 }: AccountBalancesProps) {
   if (balances.length === 0) return null
 
@@ -30,6 +32,15 @@ export function AccountBalances({
       <div className="flex items-center justify-between">
         <h2 className="text-[13px] font-extrabold text-content">Rekening</h2>
         <div className="flex items-center gap-3.5">
+          {onCashWithdrawal && (
+            <button
+              onClick={onCashWithdrawal}
+              className="flex items-center gap-1.5 text-xs font-bold text-accent"
+            >
+              <Banknote size={13} strokeWidth={2.5} />
+              Tarik tunai
+            </button>
+          )}
           {balances.length > 1 && (
             <button
               onClick={onTransfer}

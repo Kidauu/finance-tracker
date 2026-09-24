@@ -96,3 +96,14 @@ export interface AccountBalance {
   totalIn: number
   totalOut: number
 }
+
+/** A saved reconciliation between the app's calculated balance and the real one. */
+export interface AccountReconciliation {
+  id: string
+  user_id: string
+  account_id: string
+  expected_balance: number
+  actual_balance: number
+  adjustment: number
+  reconciled_at: string
+}
