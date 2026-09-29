@@ -46,7 +46,10 @@ export default function Reports() {
   const [exporting, setExporting] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const { showToast } = useToast()
-  const { balances } = useAccountBalances()
+  // account balances as they stood at the end of the selected range, not
+  // today's real balance — otherwise a report for a past period would show
+  // a "Saldo per Rekening" that already includes everything since then
+  const { balances } = useAccountBalances(to)
 
   const openAdd = useCallback(() => setFormOpen(true), [])
   useRegisterAddAction(openAdd)

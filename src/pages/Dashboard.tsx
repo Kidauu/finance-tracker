@@ -56,7 +56,13 @@ export default function Dashboard() {
   const range = viewAll || !viewedPeriod ? undefined : { from: viewedPeriod.start, to: viewedPeriod.end }
   const { data: transactions, isLoading, isError } = useTransactions(range)
   const { months, gajiCategory, unrecordedPastCount } = usePaydayHistory(PERIOD_HISTORY)
-  const { balances, totalBalance } = useAccountBalances()
+  // Rekening balances are a snapshot in time, not a period-scoped total — so
+  // "the balance for Agustus" means the balance as it stood at Agustus's
+  // close, not today's real balance with September's flow baked in. Omitting
+  // asOfDate (viewAll, or before periods have loaded) falls back to the real
+  // current balance.
+  const balanceAsOfDate = viewAll || !viewedPeriod ? undefined : viewedPeriod.end
+  const { balances, totalBalance } = useAccountBalances(balanceAsOfDate)
   const { signOut } = useAuth()
   const cashAccount = balances.find((b) => b.account.name.trim().toLowerCase() === 'cash')?.account
   const bcaAccount =
@@ -260,6 +266,7 @@ export default function Dashboard() {
             onManage={() => setAccountsOpen(true)}
             onTransfer={openTransfer}
             onCashWithdrawal={bcaAccount && cashAccount ? openCashWithdrawal : undefined}
+            asOfLabel={balanceAsOfDate ? `per ${formatDateShort(balanceAsOfDate)}` : undefined}
           />
 
           <PaydayPanel

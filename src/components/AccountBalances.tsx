@@ -9,6 +9,8 @@ interface AccountBalancesProps {
   onManage: () => void
   onTransfer: () => void
   onCashWithdrawal?: () => void
+  /** e.g. "per 27 Sep 2026" — shown when the balances are a past period's closing snapshot rather than the real current balance */
+  asOfLabel?: string
 }
 
 const TINTS = [
@@ -24,13 +26,17 @@ export function AccountBalances({
   onManage,
   onTransfer,
   onCashWithdrawal,
+  asOfLabel,
 }: AccountBalancesProps) {
   if (balances.length === 0) return null
 
   return (
     <section className="flex flex-col gap-2.5">
       <div className="flex items-center justify-between">
-        <h2 className="text-[13px] font-extrabold text-content">Rekening</h2>
+        <div className="flex items-baseline gap-2">
+          <h2 className="text-[13px] font-extrabold text-content">Rekening</h2>
+          {asOfLabel && <span className="text-[11px] font-semibold text-muted">{asOfLabel}</span>}
+        </div>
         <div className="flex items-center gap-3.5">
           {onCashWithdrawal && (
             <button
@@ -87,7 +93,9 @@ export function AccountBalances({
       </div>
 
       <div className="flex items-baseline justify-between px-1 pt-0.5">
-        <span className="text-[11px] font-semibold text-muted">Total semua rekening</span>
+        <span className="text-[11px] font-semibold text-muted">
+          {asOfLabel ? `Total ${asOfLabel}` : 'Total semua rekening'}
+        </span>
         <span
           className={`nums text-[13px] font-extrabold ${
             totalBalance < 0 ? 'text-expense' : 'text-content'

@@ -135,13 +135,23 @@ export function useReconcileAccount() {
 }
 
 /**
- * Live balance per account, over the full history (balances are cumulative,
- * so they can't be scoped to a pay period). Transfers move value between two
+ * Balance per account, accumulated from each account's opening balance
+ * through every transaction dated on or before `asOfDate` (inclusive).
+ * Omit `asOfDate` for the real, current balance — used for reconciliation,
+ * where you always want to match today's actual bank balance regardless of
+ * which pay period the Dashboard happens to be showing.
+ *
+ * Passing a period's end date gives that period's closing balance instead —
+ * the whole point being that a balance is a snapshot in time, so "the
+ * balance for Agustus" must freeze out everything that happened in
+ * September, not silently include it. Transfers move value between two
  * accounts without touching income or expense.
  */
-export function useAccountBalances() {
+export function useAccountBalances(asOfDate?: string) {
   const { data: accounts, isLoading: accountsLoading } = useAccounts()
-  const { data: transactions, isLoading: txLoading } = useTransactions()
+  const { data: transactions, isLoading: txLoading } = useTransactions(
+    asOfDate ? { to: asOfDate } : undefined,
+  )
 
   const balances = useMemo<AccountBalance[]>(() => {
     const byId = new Map<string, AccountBalance>()
