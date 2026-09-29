@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { LogOut } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import { useTransactions } from '../hooks/useTransactions'
 import { useSeedDefaultCategories } from '../hooks/useCategories'
 import { usePaydayHistory, type PaydayMonth } from '../hooks/usePaydayHistory'
@@ -39,14 +39,23 @@ function greeting(): string {
   return 'Selamat malam'
 }
 
+// keep this in sync with usePaydayHistory's default — the payday panel and
+// the period navigator need to agree on which months are reachable
+const PERIOD_HISTORY = 12
+
 export default function Dashboard() {
   useSeedDefaultCategories(true)
 
-  const [period, setPeriod] = useState<'cycle' | 'all'>('cycle')
-  const { current: cycle } = usePayPeriods()
-  const range = period === 'cycle' ? { from: cycle.start, to: cycle.end } : undefined
+  const { periods } = usePayPeriods(PERIOD_HISTORY)
+  const [viewAll, setViewAll] = useState(false)
+  // 0 = current period, 1 = one period back, etc. — periods[] is newest-first
+  const [periodOffset, setPeriodOffset] = useState(0)
+  const viewedPeriod = periods[periodOffset] ?? periods[0]
+  const isCurrentPeriod = periodOffset === 0
+
+  const range = viewAll || !viewedPeriod ? undefined : { from: viewedPeriod.start, to: viewedPeriod.end }
   const { data: transactions, isLoading, isError } = useTransactions(range)
-  const { months, gajiCategory, unrecordedPastCount } = usePaydayHistory()
+  const { months, gajiCategory, unrecordedPastCount } = usePaydayHistory(PERIOD_HISTORY)
   const { balances, totalBalance } = useAccountBalances()
   const { signOut } = useAuth()
   const cashAccount = balances.find((b) => b.account.name.trim().toLowerCase() === 'cash')?.account
@@ -147,13 +156,35 @@ export default function Dashboard() {
     setFormOpen(true)
   }
 
+  // periods[] is newest-first, so "older" moves the offset up and "newer" down
+  function goToOlderPeriod() {
+    setViewAll(false)
+    setPeriodOffset((i) => Math.min(i + 1, periods.length - 1))
+  }
+
+  function goToNewerPeriod() {
+    setViewAll(false)
+    setPeriodOffset((i) => Math.max(i - 1, 0))
+  }
+
+  function viewPaydayMonth(month: PaydayMonth) {
+    const monthKey = month.monthStart.slice(0, 7)
+    const index = periods.findIndex((p) => p.key === monthKey)
+    if (index === -1) return
+    setViewAll(false)
+    setPeriodOffset(index)
+  }
+
   const net = totalIncome - totalExpense
-  const status =
-    period === 'all'
-      ? 'Semua catatan kamu'
-      : net >= 0
-        ? 'Periode ini masih aman'
-        : 'Periode ini lagi minus'
+  const status = viewAll
+    ? 'Semua catatan kamu'
+    : !viewedPeriod
+      ? 'Memuat periode…'
+      : isCurrentPeriod
+        ? net >= 0
+          ? 'Periode ini masih aman'
+          : 'Periode ini lagi minus'
+        : `${viewedPeriod.monthLabel} · ${net >= 0 ? 'surplus' : 'minus'}`
 
   return (
     <div className="flex flex-col gap-5">
@@ -171,18 +202,41 @@ export default function Dashboard() {
         </button>
       </header>
 
-      <div className="flex gap-1.5 rounded-2xl bg-surface-alt p-1.5">
-        {(['cycle', 'all'] as const).map((p) => (
+      <div className="flex items-center gap-2">
+        <div className="flex flex-1 items-center gap-1 rounded-2xl bg-surface-alt p-1.5">
           <button
-            key={p}
-            onClick={() => setPeriod(p)}
-            className={`flex-1 rounded-xl py-2 text-xs font-bold transition-colors ${
-              period === p ? 'bg-surface text-content shadow-sm' : 'text-muted'
+            onClick={goToOlderPeriod}
+            disabled={viewAll || periodOffset >= periods.length - 1}
+            aria-label="Periode sebelumnya"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted disabled:opacity-30"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            onClick={() => setViewAll(false)}
+            className={`flex-1 truncate rounded-xl py-1.5 text-xs font-bold transition-colors ${
+              !viewAll ? 'bg-surface text-content shadow-sm' : 'text-muted'
             }`}
           >
-            {p === 'cycle' ? cycle.label : 'Semua'}
+            {viewedPeriod?.label ?? '…'}
           </button>
-        ))}
+          <button
+            onClick={goToNewerPeriod}
+            disabled={viewAll || isCurrentPeriod}
+            aria-label="Periode berikutnya"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted disabled:opacity-30"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+        <button
+          onClick={() => setViewAll(true)}
+          className={`shrink-0 rounded-2xl px-3.5 py-2.5 text-xs font-bold transition-colors ${
+            viewAll ? 'bg-ink text-on-ink' : 'bg-surface-alt text-muted'
+          }`}
+        >
+          Semua
+        </button>
       </div>
 
       {isLoading && <LoadingBlock />}
@@ -194,8 +248,8 @@ export default function Dashboard() {
             totalIncome={totalIncome}
             totalExpense={totalExpense}
             periodLabel={
-              period === 'cycle'
-                ? `${formatDateShort(cycle.start).replace(/ \d{4}$/, '')} – ${formatDateShort(cycle.end).replace(/ \d{4}$/, '')}`
+              !viewAll && viewedPeriod
+                ? `${formatDateShort(viewedPeriod.start).replace(/ \d{4}$/, '')} – ${formatDateShort(viewedPeriod.end).replace(/ \d{4}$/, '')}`
                 : undefined
             }
           />
@@ -214,6 +268,7 @@ export default function Dashboard() {
             onRecord={openPaydayRecord}
             onEdit={openPaydayEdit}
             onManageHolidays={() => setHolidaysOpen(true)}
+            onViewPeriod={viewPaydayMonth}
           />
 
           <section className="flex flex-col gap-2.5">

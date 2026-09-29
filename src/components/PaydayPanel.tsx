@@ -9,6 +9,8 @@ interface PaydayPanelProps {
   onRecord: (month: PaydayMonth) => void
   onEdit: (month: PaydayMonth) => void
   onManageHolidays: () => void
+  /** jump the dashboard's period navigator to this month's isolated recap */
+  onViewPeriod: (month: PaydayMonth) => void
 }
 
 function daysUntil(iso: string): number {
@@ -33,36 +35,44 @@ function MonthRow({
   month,
   onRecord,
   onEdit,
+  onViewPeriod,
 }: {
   month: PaydayMonth
   onRecord: (m: PaydayMonth) => void
   onEdit: (m: PaydayMonth) => void
+  onViewPeriod: (m: PaydayMonth) => void
 }) {
   const recorded = month.loggedAmount !== null
 
   return (
     <div className="flex items-center gap-3 rounded-[18px] border border-line bg-surface px-3.5 py-3">
-      <span
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px] ${
-          recorded ? 'bg-accent-soft2 text-accent' : 'bg-surface-alt text-faint'
-        }`}
+      <button
+        onClick={() => onViewPeriod(month)}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        aria-label={`Lihat rekap ${month.label}`}
       >
-        {recorded ? <Check size={16} strokeWidth={2.6} /> : <CalendarDays size={16} />}
-      </span>
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px] ${
+            recorded ? 'bg-accent-soft2 text-accent' : 'bg-surface-alt text-faint'
+          }`}
+        >
+          {recorded ? <Check size={16} strokeWidth={2.6} /> : <CalendarDays size={16} />}
+        </span>
 
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-bold text-content">
-          {month.label}
-          {month.isActiveCycle && (
-            <span className="ml-2 rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-bold text-accent">
-              Berjalan
-            </span>
-          )}
-        </p>
-        <p className="text-[11px] text-subtle">
-          {formatDateShort(month.payday)} – {formatDateShort(month.periodEnd)}
-        </p>
-      </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-content">
+            {month.label}
+            {month.isActiveCycle && (
+              <span className="ml-2 rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                Berjalan
+              </span>
+            )}
+          </p>
+          <p className="text-[11px] text-subtle">
+            {formatDateShort(month.payday)} – {formatDateShort(month.periodEnd)}
+          </p>
+        </div>
+      </button>
 
       {recorded ? (
         <button onClick={() => onEdit(month)} className="shrink-0 text-right">
@@ -92,6 +102,7 @@ export function PaydayPanel({
   onRecord,
   onEdit,
   onManageHolidays,
+  onViewPeriod,
 }: PaydayPanelProps) {
   const [open, setOpen] = useState(false)
 
@@ -127,7 +138,13 @@ export function PaydayPanel({
       {open && (
         <div className="flex flex-col gap-2">
           {months.slice(0, 6).map((m) => (
-            <MonthRow key={m.monthStart} month={m} onRecord={onRecord} onEdit={onEdit} />
+            <MonthRow
+              key={m.monthStart}
+              month={m}
+              onRecord={onRecord}
+              onEdit={onEdit}
+              onViewPeriod={onViewPeriod}
+            />
           ))}
           <button
             onClick={onManageHolidays}
