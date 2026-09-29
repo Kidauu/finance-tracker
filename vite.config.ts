@@ -9,7 +9,14 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'autoUpdate' silently swaps the service worker in the background —
+      // on iOS PWAs that check is unreliable/delayed, so a fix can be
+      // deployed and verified yet the phone keeps running the old bundle
+      // with no visible sign anything is stale. 'prompt' + injectRegister
+      // disabled hands registration to UpdatePrompt.tsx, which polls for
+      // updates and surfaces an explicit "versi baru" banner instead.
+      registerType: 'prompt',
+      injectRegister: false,
       includeAssets: ['icons/favicon.svg'],
       manifest: {
         name: 'Finance Tracker',

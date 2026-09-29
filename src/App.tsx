@@ -5,6 +5,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import { ToastProvider } from './contexts/ToastContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { LoadingBlock } from './components/ui/Feedback'
+import { UpdatePrompt } from './components/UpdatePrompt'
 
 const Login = lazy(() => import('./pages/Login'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -24,6 +25,7 @@ const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <UpdatePrompt />
       <ToastProvider>
         <AuthProvider>
           <BrowserRouter>
