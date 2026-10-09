@@ -9,7 +9,8 @@ import { ConfirmDialog } from './ui/ConfirmDialog'
 import { Input, Label, Select } from './ui/Input'
 import { CurrencyInput } from './ui/CurrencyInput'
 import { formatDateShort, formatIDR, todayISO } from '../lib/format'
-import { iconForCategory } from '../lib/categoryIcons'
+import { CategoryIcon } from '../lib/categoryIcons'
+import { splitCategoriesForPicker } from '../lib/categoryOrder'
 import type { NewTransaction, TransactionType, TransactionWithCategory } from '../types'
 
 interface TransactionFormPrefill {
@@ -100,7 +101,10 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
   const isTransfer = type === 'transfer'
   const transferAccountsLocked =
     isTransfer && prefill?.lockTransferAccounts === true && transaction === undefined
-  const filteredCategories = (categories ?? []).filter((c) => c.type === type)
+  const { priority: priorityCategories, others: otherCategories } = useMemo(
+    () => splitCategoriesForPicker(categories ?? [], type),
+    [categories, type],
+  )
   const isSaving = addTransaction.isPending || updateTransaction.isPending
 
   /**
@@ -141,11 +145,21 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
     { label: 'Kemarin', value: yesterdayISO() },
   ]
 
-  // the design shows a compact icon grid; the rest stay behind "Lainnya"
-  const QUICK_COUNT = 7
-  const visibleCategories = showAllCategories
-    ? filteredCategories
-    : filteredCategories.slice(0, QUICK_COUNT)
+  // the daily pots get their own large row; the rest stay a compact grid with
+  // the overflow behind "Lainnya". Without a priority row (income) the grid
+  // keeps its old 7 quick slots, otherwise 3 slots + "Lainnya" fill one row.
+  const QUICK_COUNT = priorityCategories.length > 0 ? 3 : 7
+  const hasCategories = priorityCategories.length + otherCategories.length > 0
+  const hiddenCategories = otherCategories.slice(QUICK_COUNT)
+  // editing a transaction whose category sits behind "Lainnya" must still show it selected
+  const initialCategoryId = transaction?.category_id ?? prefill?.categoryId
+  const expanded =
+    showAllCategories || hiddenCategories.some((c) => c.id === initialCategoryId)
+  const visibleCategories = expanded ? otherCategories : otherCategories.slice(0, QUICK_COUNT)
+
+  function toggleCategory(id: string) {
+    setCategoryId(categoryId === id ? '' : id)
+  }
 
   function handleTypeChange(next: TransactionType) {
     setType(next)
@@ -255,18 +269,52 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
         heroLabel="Berapa?"
       />
 
-      {!isTransfer && filteredCategories.length > 0 && (
+      {!isTransfer && hasCategories && (
         <div className="flex flex-col gap-2.5">
           <Label className="mb-0">Kategori</Label>
+
+          {priorityCategories.length > 0 && (
+            <div className="flex gap-2">
+              {priorityCategories.map((c) => {
+                const selected = categoryId === c.id
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => toggleCategory(c.id)}
+                    style={selected ? { borderColor: c.color } : undefined}
+                    className={`flex min-w-0 flex-1 flex-col items-center gap-2 rounded-2xl px-2 py-3.5 transition-colors ${
+                      selected ? 'border-[1.5px] bg-surface-alt' : 'border border-line bg-surface'
+                    }`}
+                  >
+                    <span
+                      className="flex h-10 w-10 items-center justify-center rounded-xl"
+                      style={{ backgroundColor: c.color + '22', color: c.color }}
+                    >
+                      <CategoryIcon name={c.name} size={20} />
+                    </span>
+                    <span
+                      className="line-clamp-2 w-full text-center text-xs font-bold leading-tight"
+                      style={selected ? { color: c.color } : undefined}
+                    >
+                      {c.name}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
           <div className="grid grid-cols-4 gap-2">
             {visibleCategories.map((c) => {
-              const Icon = iconForCategory(c.name)
               const selected = categoryId === c.id
               return (
                 <button
                   key={c.id}
                   type="button"
-                  onClick={() => setCategoryId(selected ? '' : c.id)}
+                  aria-pressed={selected}
+                  onClick={() => toggleCategory(c.id)}
                   style={
                     selected ? { borderColor: c.color, color: c.color } : undefined
                   }
@@ -276,14 +324,14 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
                       : 'border border-line bg-surface text-muted'
                   }`}
                 >
-                  <Icon size={17} />
+                  <CategoryIcon name={c.name} size={17} />
                   <span className="w-full truncate px-1 text-[10px] font-semibold leading-tight">
                     {c.name}
                   </span>
                 </button>
               )
             })}
-            {!showAllCategories && filteredCategories.length > QUICK_COUNT && (
+            {!expanded && hiddenCategories.length > 0 && (
               <button
                 type="button"
                 onClick={() => setShowAllCategories(true)}
