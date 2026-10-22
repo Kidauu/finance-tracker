@@ -90,7 +90,7 @@ export function buildMoneyInsights({
   const tightest = budgetStates
     .filter(({ spent, pace }) => spent > 0 && pace.safeDaily !== null && pace.remaining >= 0)
     .sort((a, b) => b.spent / b.budget.monthly_amount - a.spent / a.budget.monthly_amount)[0]
-  if (tightest && tightest.pace.safeDaily !== null) {
+  if (tightest?.pace.safeDaily !== null) {
     insights.push({
       tone: 'pace',
       title: `${tightest.budget.category.name}: aman ${rupiah(tightest.pace.safeDaily)}/hari`,
