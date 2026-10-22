@@ -6,26 +6,49 @@ export interface Toast {
   id: number
   message: string
   tone: ToastTone
+  action?: {
+    label: string
+    onClick: () => void
+  }
 }
 
 interface ToastContextValue {
-  showToast: (message: string, tone?: ToastTone) => void
+  showToast: (
+    message: string,
+    tone?: ToastTone,
+    action?: { label: string; onClick: () => void },
+  ) => void
 }
 
 export const ToastContext = createContext<ToastContextValue | undefined>(undefined)
 
 const DURATION_MS = 2800
+const ACTION_DURATION_MS = 5000
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
-  const showToast = useCallback((message: string, tone: ToastTone = 'success') => {
-    setToasts((prev) => [...prev, { id: Date.now() + Math.random(), message, tone }])
+  const showToast = useCallback(
+    (
+      message: string,
+      tone: ToastTone = 'success',
+      action?: { label: string; onClick: () => void },
+    ) => {
+      setToasts((prev) => [...prev, { id: Date.now() + Math.random(), message, tone, action }])
+    },
+    [],
+  )
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id))
   }, [])
 
   useEffect(() => {
     if (toasts.length === 0) return
-    const timer = setTimeout(() => setToasts((prev) => prev.slice(1)), DURATION_MS)
+    const timer = setTimeout(
+      () => setToasts((prev) => prev.slice(1)),
+      toasts[0].action ? ACTION_DURATION_MS : DURATION_MS,
+    )
     return () => clearTimeout(timer)
   }, [toasts])
 
@@ -41,7 +64,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               t.tone === 'success' ? 'bg-ink text-on-ink' : 'bg-expense text-white'
             }`}
           >
-            {t.message}
+            <span>{t.message}</span>
+            {t.action && (
+              <button
+                type="button"
+                onClick={() => {
+                  dismissToast(t.id)
+                  t.action?.onClick()
+                }}
+                className="ml-3 shrink-0 rounded-lg bg-white/15 px-2.5 py-1 text-[11px] font-extrabold text-inherit hover:bg-white/25"
+              >
+                {t.action.label}
+              </button>
+            )}
           </div>
         ))}
       </div>

@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { CalendarDays, ChevronDown, Pencil, TriangleAlert } from 'lucide-react'
+import { CalendarDays, ChevronDown, Copy, Pencil, TriangleAlert } from 'lucide-react'
 import { useCategories } from '../hooks/useCategories'
 import { useAccountBalances, useAccounts } from '../hooks/useAccounts'
 import { useAddTransaction, useUpdateTransaction } from '../hooks/useTransactions'
@@ -13,7 +13,7 @@ import { CategoryIcon } from '../lib/categoryIcons'
 import { splitCategoriesForPicker } from '../lib/categoryOrder'
 import type { NewTransaction, TransactionType, TransactionWithCategory } from '../types'
 
-interface TransactionFormPrefill {
+export interface TransactionFormPrefill {
   type?: TransactionType
   categoryId?: string
   accountId?: string
@@ -21,6 +21,8 @@ interface TransactionFormPrefill {
   /** keeps a purpose-built transfer, such as an ATM withdrawal, on its intended route */
   lockTransferAccounts?: boolean
   date?: string
+  amount?: string
+  description?: string
   /** shown above the form when the context isn't obvious, e.g. backfilling a past payday */
   note?: string
 }
@@ -28,6 +30,7 @@ interface TransactionFormPrefill {
 interface TransactionFormProps {
   transaction?: TransactionWithCategory
   prefill?: TransactionFormPrefill
+  onDuplicate?: (transaction: TransactionWithCategory) => void
   onSaved: () => void
   onCancel: () => void
 }
@@ -70,7 +73,13 @@ function applyBalanceChange(
   }
 }
 
-export function TransactionForm({ transaction, prefill, onSaved, onCancel }: TransactionFormProps) {
+export function TransactionForm({
+  transaction,
+  prefill,
+  onDuplicate,
+  onSaved,
+  onCancel,
+}: TransactionFormProps) {
   const { data: categories } = useCategories()
   const { data: accounts } = useAccounts()
   const { balances } = useAccountBalances()
@@ -86,14 +95,16 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
     ''
 
   const [type, setType] = useState<TransactionType>(transaction?.type ?? prefill?.type ?? 'expense')
-  const [amount, setAmount] = useState(transaction ? String(Math.round(transaction.amount)) : '')
+  const [amount, setAmount] = useState(
+    transaction ? String(Math.round(transaction.amount)) : prefill?.amount ?? '',
+  )
   const [categoryId, setCategoryId] = useState(transaction?.category_id ?? prefill?.categoryId ?? '')
   const [accountId, setAccountId] = useState(defaultAccountId)
   const [toAccountId, setToAccountId] = useState(
     transaction?.to_account_id ?? prefill?.toAccountId ?? '',
   )
   const [date, setDate] = useState(transaction?.transaction_date ?? prefill?.date ?? todayISO())
-  const [description, setDescription] = useState(transaction?.description ?? '')
+  const [description, setDescription] = useState(transaction?.description ?? prefill?.description ?? '')
   const [showAllCategories, setShowAllCategories] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [overdraftConfirmOpen, setOverdraftConfirmOpen] = useState(false)
@@ -472,6 +483,18 @@ export function TransactionForm({ transaction, prefill, onSaved, onCancel }: Tra
       )}
 
       <div className="mt-1 flex gap-2.5">
+        {transaction && onDuplicate && (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => onDuplicate(transaction)}
+            className="!px-3"
+            aria-label="Duplikat transaksi"
+          >
+            <Copy size={16} />
+            Duplikat
+          </Button>
+        )}
         <Button type="button" variant="secondary" onClick={onCancel} className="flex-1">
           Batal
         </Button>

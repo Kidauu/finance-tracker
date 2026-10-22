@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
-import type { TransactionWithCategory } from '../types'
+import type { NewTransaction, TransactionWithCategory } from '../types'
 import { formatDateShort, formatIDR, todayISO } from '../lib/format'
-import { useDeleteTransaction } from '../hooks/useTransactions'
+import { useAddTransaction, useDeleteTransaction } from '../hooks/useTransactions'
 import { useToast } from '../hooks/useToast'
 import { iconForCategory, TransferIcon } from '../lib/categoryIcons'
 import { EmptyState } from './ui/Feedback'
@@ -47,6 +47,7 @@ function tintFor(t: TransactionWithCategory) {
 
 export function TransactionList({ transactions, onEdit }: TransactionListProps) {
   const deleteTransaction = useDeleteTransaction()
+  const addTransaction = useAddTransaction()
   const { showToast } = useToast()
   const [pendingDelete, setPendingDelete] = useState<TransactionWithCategory | null>(null)
 
@@ -61,9 +62,32 @@ export function TransactionList({ transactions, onEdit }: TransactionListProps) 
 
   async function handleConfirmDelete() {
     if (!pendingDelete) return
+    const deleted = pendingDelete
     try {
-      await deleteTransaction.mutateAsync(pendingDelete.id)
-      showToast('Transaksi dihapus')
+      await deleteTransaction.mutateAsync(deleted.id)
+      let restoring = false
+      showToast('Transaksi dihapus', 'success', {
+        label: 'Batal',
+        onClick: () => {
+          if (restoring) return
+          restoring = true
+          const restore: NewTransaction = {
+            type: deleted.type,
+            amount: deleted.amount,
+            category_id: deleted.category_id,
+            account_id: deleted.account_id,
+            to_account_id: deleted.to_account_id,
+            description: deleted.description,
+            transaction_date: deleted.transaction_date,
+          }
+          void addTransaction
+            .mutateAsync(restore)
+            .then(() => showToast('Transaksi dikembalikan'))
+            .catch((err: unknown) =>
+              showToast(err instanceof Error ? err.message : 'Gagal mengembalikan transaksi', 'error'),
+            )
+        },
+      })
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Gagal menghapus', 'error')
     } finally {
@@ -161,7 +185,7 @@ export function TransactionList({ transactions, onEdit }: TransactionListProps) 
               } — ${formatIDR(pendingDelete.amount)} pada ${formatDateShort(pendingDelete.transaction_date)}. Tindakan ini gak bisa dibatalkan.`
             : ''
         }
-        busy={deleteTransaction.isPending}
+        busy={deleteTransaction.isPending || addTransaction.isPending}
         onConfirm={handleConfirmDelete}
         onCancel={() => setPendingDelete(null)}
       />

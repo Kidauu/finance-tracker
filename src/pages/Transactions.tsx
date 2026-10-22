@@ -5,13 +5,13 @@ import { useCategories } from '../hooks/useCategories'
 import { useAccounts } from '../hooks/useAccounts'
 import { useRegisterAddAction } from '../hooks/useAddAction'
 import { TransactionList } from '../components/TransactionList'
-import { TransactionForm } from '../components/TransactionForm'
+import { TransactionForm, type TransactionFormPrefill } from '../components/TransactionForm'
 import { CategoryManager } from '../components/CategoryManager'
 import { TransactionFilterPanel } from '../components/TransactionFilterPanel'
 import { Modal } from '../components/ui/Modal'
 import { IconInput } from '../components/ui/Input'
 import { LoadingBlock, ErrorBanner } from '../components/ui/Feedback'
-import { formatIDR } from '../lib/format'
+import { formatIDR, todayISO } from '../lib/format'
 import { CategoryIcon, AccountIcon } from '../lib/categoryIcons'
 import type { TransactionType, TransactionWithCategory } from '../types'
 
@@ -39,6 +39,7 @@ export default function Transactions() {
   const [formOpen, setFormOpen] = useState(false)
   const [categoriesOpen, setCategoriesOpen] = useState(false)
   const [editing, setEditing] = useState<TransactionWithCategory | undefined>(undefined)
+  const [prefill, setPrefill] = useState<TransactionFormPrefill | undefined>(undefined)
 
   // categories offered in the filter panel are narrowed to whatever the type
   // pill already selected — a category picked for "Keluar" makes no sense once
@@ -124,6 +125,7 @@ export default function Transactions() {
 
   const openAdd = useCallback(() => {
     setEditing(undefined)
+    setPrefill(undefined)
     setFormOpen(true)
   }, [])
 
@@ -131,7 +133,22 @@ export default function Transactions() {
 
   function openEdit(t: TransactionWithCategory) {
     setEditing(t)
+    setPrefill(undefined)
     setFormOpen(true)
+  }
+
+  function duplicateTransaction(t: TransactionWithCategory) {
+    setEditing(undefined)
+    setPrefill({
+      type: t.type,
+      categoryId: t.category_id ?? undefined,
+      accountId: t.account_id ?? undefined,
+      toAccountId: t.to_account_id ?? undefined,
+      amount: String(Math.round(t.amount)),
+      description: t.description ?? '',
+      date: todayISO(),
+      note: 'Salinan transaksi — cek nominal dan tanggal sebelum menyimpan.',
+    })
   }
 
   return (
@@ -246,8 +263,10 @@ export default function Transactions() {
         title={editing ? 'Ubah transaksi' : 'Catat transaksi'}
       >
         <TransactionForm
-          key={editing?.id ?? 'new'}
+          key={editing?.id ?? `new-${prefill?.type ?? ''}-${prefill?.date ?? ''}`}
           transaction={editing}
+          prefill={prefill}
+          onDuplicate={duplicateTransaction}
           onSaved={() => setFormOpen(false)}
           onCancel={() => setFormOpen(false)}
         />
