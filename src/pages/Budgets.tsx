@@ -11,7 +11,8 @@ import { AddPotForm } from '../components/AddPotForm'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { LoadingBlock, ErrorBanner } from '../components/ui/Feedback'
 import { Modal } from '../components/ui/Modal'
-import { formatDateShort, formatIDR } from '../lib/format'
+import { formatDateShort, formatIDR, todayISO } from '../lib/format'
+import { budgetPace } from '../lib/budgetPace'
 import type { Category } from '../types'
 
 export default function Budgets() {
@@ -64,8 +65,16 @@ export default function Budgets() {
   }, [budgets])
 
   const totalAllocated = Array.from(budgetByCategory.values()).reduce((a, b) => a + b, 0)
-  const totalSpent = Array.from(spentByCategory.values()).reduce((a, b) => a + b, 0)
+  // The summary is about money with a jatah. Spending from pots with no
+  // allocation is still visible on its own card, but must not make the
+  // combined budget percentage look worse than it actually is.
+  const totalSpent = Array.from(budgetByCategory.entries()).reduce(
+    (sum, [categoryId, allocated]) =>
+      allocated > 0 ? sum + (spentByCategory.get(categoryId) ?? 0) : sum,
+    0,
+  )
   const pct = totalAllocated > 0 ? Math.min(100, Math.round((totalSpent / totalAllocated) * 100)) : 0
+  const overallPace = budgetPace(totalAllocated, totalSpent, cycle.start, cycle.end, todayISO())
 
   // pots with a jatah first, then the untouched ones
   const sorted = useMemo(
@@ -103,12 +112,11 @@ export default function Budgets() {
 
       {!isLoading && !isError && (
         <>
-          <section className="flex flex-col gap-2.5 rounded-[22px] border border-accent-line bg-accent-soft p-[18px]">
-            <span className="text-xs font-bold text-label">Terpakai {cycle.label}</span>
+          <section className="flex flex-col gap-3 rounded-[22px] border border-accent-line bg-accent-soft p-[18px]">
+            <span className="text-xs font-bold text-label">Jatah {cycle.label}</span>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-sm font-bold text-label">Rp</span>
               <span className="nums text-[28px] font-extrabold leading-none text-content">
-                {formatIDR(totalSpent).replace(/^Rp\s?/, '')}
+                {formatIDR(Math.max(0, overallPace.remaining))}
               </span>
             </div>
             {totalAllocated > 0 && (
@@ -121,27 +129,47 @@ export default function Budgets() {
             )}
             <span className="text-xs text-label">
               {totalAllocated > 0
-                ? `dari jatah ${formatIDR(totalAllocated)} · ${pct}% jalan`
+                ? overallPace.remaining < 0
+                  ? `melewati jatah ${formatIDR(Math.abs(overallPace.remaining))}`
+                  : `sisa dari jatah ${formatIDR(totalAllocated)} · ${pct}% terpakai`
                 : 'belum ada jatah yang diset'}
             </span>
+            {overallPace.safeDaily !== null && (
+              <div className="flex items-center justify-between rounded-xl bg-surface/70 px-3 py-2.5 text-[11px]">
+                <span className="font-bold text-label">Batas aman hari ini</span>
+                <span className="nums font-extrabold text-content">
+                  {formatIDR(overallPace.safeDaily)}/hari
+                </span>
+              </div>
+            )}
             <span className="text-[11px] text-label/70">
+              {overallPace.daysRemaining > 0
+                ? `${overallPace.daysRemaining} hari tersisa · `
+                : 'Periode sudah selesai · '}
               {formatDateShort(cycle.start)} – {formatDateShort(cycle.end)}
             </span>
           </section>
 
           <div className="flex flex-col gap-2.5">
-            {sorted.map((c) => (
-              <BudgetCard
-                key={c.id}
-                category={c}
-                allocated={budgetByCategory.get(c.id) ?? 0}
-                spent={spentByCategory.get(c.id) ?? 0}
-                saving={setBudget.isPending}
-                deleting={deleteCategory.isPending && deleteCategory.variables === c.id}
-                onSave={(amount) => setBudget.mutate({ categoryId: c.id, monthlyAmount: amount })}
-                onDelete={() => setPendingDelete(c)}
-              />
-            ))}
+            {sorted.map((c) => {
+              const allocated = budgetByCategory.get(c.id) ?? 0
+              const spent = spentByCategory.get(c.id) ?? 0
+              const pace = budgetPace(allocated, spent, cycle.start, cycle.end, todayISO())
+              return (
+                <BudgetCard
+                  key={c.id}
+                  category={c}
+                  allocated={allocated}
+                  spent={spent}
+                  daysRemaining={pace.daysRemaining}
+                  safeDaily={pace.safeDaily}
+                  saving={setBudget.isPending}
+                  deleting={deleteCategory.isPending && deleteCategory.variables === c.id}
+                  onSave={(amount) => setBudget.mutate({ categoryId: c.id, periodAmount: amount })}
+                  onDelete={() => setPendingDelete(c)}
+                />
+              )
+            })}
           </div>
         </>
       )}

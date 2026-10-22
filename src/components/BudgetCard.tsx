@@ -8,6 +8,8 @@ interface BudgetCardProps {
   category: Category
   allocated: number
   spent: number
+  daysRemaining: number
+  safeDaily: number | null
   onSave: (amount: number) => void
   onDelete: () => void
   saving: boolean
@@ -18,6 +20,8 @@ export function BudgetCard({
   category,
   allocated,
   spent,
+  daysRemaining,
+  safeDaily,
   onSave,
   onDelete,
   saving,
@@ -49,7 +53,7 @@ export function BudgetCard({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-extrabold text-content">{category.name}</p>
           <p className="text-[11px] text-subtle">
-            {allocated > 0 ? `terpakai ${pct}%` : `terpakai ${formatIDR(spent)}`}
+            {allocated > 0 ? `terpakai ${pct}% periode ini` : `terpakai ${formatIDR(spent)}`}
           </p>
         </div>
 
@@ -70,7 +74,7 @@ export function BudgetCard({
               }}
               className="shrink-0 text-xs font-bold text-muted hover:text-content"
             >
-              {allocated > 0 ? 'Ubah' : 'Set pot'}
+              {allocated > 0 ? 'Ubah' : 'Set jatah'}
             </button>
             <button
               onClick={onDelete}
@@ -130,17 +134,24 @@ export function BudgetCard({
           </div>
           <div className="flex justify-between text-[11px]">
             <span className="nums font-bold text-content">
-              {formatIDR(spent).replace(/^Rp\s?/, '')}
+              {formatIDR(spent)} / {formatIDR(allocated)}
             </span>
             <span className={over ? 'font-bold text-expense' : 'text-subtle'}>
               {over
                 ? `lebih ${formatIDR(Math.abs(remaining))}`
-                : `sisa ${formatIDR(remaining)} dari ${formatIDR(allocated)}`}
+                : `sisa ${formatIDR(remaining)}`}
             </span>
           </div>
+          {!over && safeDaily !== null && (
+            <p className="text-[11px] text-label">
+              Aman {formatIDR(safeDaily)}/hari · {daysRemaining} hari tersisa
+            </p>
+          )}
         </>
       ) : (
-        <p className="text-[11px] text-subtle">Belum ada jatah. Ketuk "Set pot" buat nentuin.</p>
+        <p className="text-[11px] text-subtle">
+          Belum ada jatah. Ketuk "Set jatah" buat nentuin per periode gaji.
+        </p>
       )}
     </div>
   )

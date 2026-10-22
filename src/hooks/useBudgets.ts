@@ -21,10 +21,11 @@ export function useSetBudget() {
   return useMutation({
     mutationFn: async ({
       categoryId,
-      monthlyAmount,
+      periodAmount,
     }: {
       categoryId: string
-      monthlyAmount: number
+      /** The table column predates payroll-cycle budgets; its value is now per cycle. */
+      periodAmount: number
     }) => {
       const { data: userData } = await supabase.auth.getUser()
       if (!userData.user) throw new Error('Not authenticated')
@@ -34,7 +35,7 @@ export function useSetBudget() {
           {
             user_id: userData.user.id,
             category_id: categoryId,
-            monthly_amount: monthlyAmount,
+            monthly_amount: periodAmount,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'user_id,category_id' },

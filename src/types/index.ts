@@ -81,6 +81,7 @@ export interface Budget {
   id: string
   user_id: string
   category_id: string
+  /** Legacy DB column name; the app treats this value as one payroll period's jatah. */
   monthly_amount: number
   created_at: string
   updated_at: string
