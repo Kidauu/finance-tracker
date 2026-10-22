@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
-import { Lock, Mail, Wallet } from 'lucide-react'
+import { ArrowLeft, Lock, Mail, Wallet } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { Button } from '../components/ui/Button'
@@ -9,7 +9,7 @@ import { ErrorBanner } from '../components/ui/Feedback'
 
 export default function Login() {
   const { session, loading } = useAuth()
-  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const [mode, setMode] = useState<'login' | 'signup' | 'recovery'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -27,7 +27,13 @@ export default function Login() {
     setSubmitting(true)
 
     try {
-      if (mode === 'signup') {
+      if (mode === 'recovery') {
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        })
+        if (resetError) throw resetError
+        setInfo('Link untuk membuat password baru sudah dikirim. Cek inbox email kamu.')
+      } else if (mode === 'signup') {
         const { data, error: signUpError } = await supabase.auth.signUp({ email, password })
         if (signUpError) throw signUpError
         if (!data.session) {
@@ -61,7 +67,9 @@ export default function Login() {
             <p className="text-sm leading-relaxed text-muted">
               {mode === 'login'
                 ? 'Masuk dulu, nanti kita catat pengeluaran hari ini bareng.'
-                : 'Bikin akun dulu, cuma butuh email sama kata sandi.'}
+                : mode === 'signup'
+                  ? 'Bikin akun dulu, cuma butuh email sama kata sandi.'
+                  : 'Masukkan email kamu. Kami akan kirim link untuk membuat password baru.'}
             </p>
           </div>
         </div>
@@ -80,20 +88,22 @@ export default function Login() {
               required
             />
           </div>
-          <div>
-            <Label htmlFor="password">Kata sandi</Label>
-            <IconInput
-              id="password"
-              type="password"
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              placeholder="••••••••"
-              icon={<Lock size={17} />}
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
+          {mode !== 'recovery' && (
+            <div>
+              <Label htmlFor="password">Kata sandi</Label>
+              <IconInput
+                id="password"
+                type="password"
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                placeholder="••••••••"
+                icon={<Lock size={17} />}
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+          )}
 
           {error && <ErrorBanner message={error} />}
           {info && (
@@ -103,23 +113,48 @@ export default function Login() {
           )}
 
           <Button type="submit" disabled={submitting} className="mt-2 !h-[54px] !py-0">
-            {submitting ? 'Tunggu sebentar…' : mode === 'login' ? 'Masuk' : 'Daftar'}
+            {submitting
+              ? 'Tunggu sebentar…'
+              : mode === 'login'
+                ? 'Masuk'
+                : mode === 'signup'
+                  ? 'Daftar'
+                  : 'Kirim link pemulihan'}
           </Button>
         </form>
 
-        <button
-          className="text-center text-[13px] text-muted"
-          onClick={() => {
-            setMode(mode === 'login' ? 'signup' : 'login')
-            setError(null)
-            setInfo(null)
-          }}
-        >
-          {mode === 'login' ? 'Belum punya akun? ' : 'Udah punya akun? '}
-          <span className="font-bold text-accent">
-            {mode === 'login' ? 'Daftar gratis' : 'Masuk'}
-          </span>
-        </button>
+        <div className="flex flex-col items-center gap-3 text-[13px] text-muted">
+          {mode === 'login' && (
+            <button
+              onClick={() => {
+                setMode('recovery')
+                setError(null)
+                setInfo(null)
+              }}
+              className="font-bold text-accent"
+            >
+              Lupa password?
+            </button>
+          )}
+          <button
+            className="text-center"
+            onClick={() => {
+              setMode(mode === 'signup' ? 'login' : mode === 'recovery' ? 'login' : 'signup')
+              setError(null)
+              setInfo(null)
+            }}
+          >
+            {mode === 'login' ? 'Belum punya akun? ' : mode === 'signup' ? 'Udah punya akun? ' : ''}
+            <span className="font-bold text-accent">
+              {mode === 'login' ? 'Daftar gratis' : mode === 'signup' ? 'Masuk' : ''}
+            </span>
+            {mode === 'recovery' && (
+              <span className="inline-flex items-center gap-1 font-bold text-accent">
+                <ArrowLeft size={13} /> Kembali ke login
+              </span>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   )

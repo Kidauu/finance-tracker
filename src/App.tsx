@@ -9,6 +9,7 @@ import { UpdatePrompt } from './components/UpdatePrompt'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 
 const Login = lazy(() => import('./pages/Login'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Transactions = lazy(() => import('./pages/Transactions'))
 const Budgets = lazy(() => import('./pages/Budgets'))
@@ -40,6 +41,7 @@ export default function App() {
               <AppErrorBoundary>
                 <Routes>
                   <Route path="/login" element={<Login />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
                   <Route
                     path="/"
                     element={
