@@ -118,24 +118,17 @@ export default function Dashboard() {
   }, [transactions])
 
   const insights = useMemo(
-    () => {
-      if (!viewedPeriod || viewAll || previousLoading) return []
-      // Insights are helpful, never essential. Old or partially migrated data
-      // must not be able to take the entire dashboard down because an optional
-      // observation cannot be calculated.
-      try {
-        return buildMoneyInsights({
-          transactions: transactions ?? [],
-          previousTransactions: previousTransactions ?? [],
-          budgets: budgets ?? [],
-          periodStart: viewedPeriod.start,
-          periodEnd: viewedPeriod.end,
-          today: todayISO(),
-        })
-      } catch {
-        return []
-      }
-    },
+    () =>
+      viewedPeriod && !viewAll && !previousLoading
+        ? buildMoneyInsights({
+            transactions: transactions ?? [],
+            previousTransactions: previousTransactions ?? [],
+            budgets: budgets ?? [],
+            periodStart: viewedPeriod.start,
+            periodEnd: viewedPeriod.end,
+            today: todayISO(),
+          })
+        : [],
     [budgets, previousLoading, previousTransactions, transactions, viewAll, viewedPeriod],
   )
 

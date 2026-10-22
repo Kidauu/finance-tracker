@@ -80,7 +80,7 @@ export function buildMoneyInsights({
   if (over) {
     insights.push({
       tone: 'warning',
-      title: `${over.budget.category?.name ?? 'Pot ini'} melewati jatah`,
+      title: `${over.budget.category.name} melewati jatah`,
       detail: `Lebih ${rupiah(Math.abs(over.pace.remaining))} pada periode ini.`,
     })
   }
@@ -93,7 +93,7 @@ export function buildMoneyInsights({
   if (tightest && tightest.pace.safeDaily !== null) {
     insights.push({
       tone: 'pace',
-      title: `${tightest.budget.category?.name ?? 'Pot ini'}: aman ${rupiah(tightest.pace.safeDaily)}/hari`,
+      title: `${tightest.budget.category.name}: aman ${rupiah(tightest.pace.safeDaily)}/hari`,
       detail: `Sisa ${rupiah(tightest.pace.remaining)} untuk ${tightest.pace.daysRemaining} hari lagi.`,
     })
   }
