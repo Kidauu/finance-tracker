@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import { useTransactions } from '../hooks/useTransactions'
-import { useBudgets } from '../hooks/useBudgets'
 import { useSeedDefaultCategories } from '../hooks/useCategories'
 import { usePaydayHistory, type PaydayMonth } from '../hooks/usePaydayHistory'
 import { usePayPeriods } from '../hooks/usePayPeriods'
@@ -17,11 +16,9 @@ import { PaydayPanel } from '../components/PaydayPanel'
 import { HolidayManager } from '../components/HolidayManager'
 import { AccountBalances } from '../components/AccountBalances'
 import { AccountManager } from '../components/AccountManager'
-import { MoneyInsights } from '../components/MoneyInsights'
 import { Modal } from '../components/ui/Modal'
 import { LoadingBlock, ErrorBanner } from '../components/ui/Feedback'
-import { formatDateShort, todayISO } from '../lib/format'
-import { buildMoneyInsights } from '../lib/moneyInsights'
+import { formatDateShort } from '../lib/format'
 import type { TransactionType, TransactionWithCategory } from '../types'
 
 interface Prefill {
@@ -58,12 +55,6 @@ export default function Dashboard() {
 
   const range = viewAll || !viewedPeriod ? undefined : { from: viewedPeriod.start, to: viewedPeriod.end }
   const { data: transactions, isLoading, isError } = useTransactions(range)
-  const comparisonPeriod = !viewAll ? periods[periodOffset + 1] : undefined
-  const { data: previousTransactions, isLoading: previousLoading } = useTransactions(
-    comparisonPeriod ? { from: comparisonPeriod.start, to: comparisonPeriod.end } : undefined,
-    Boolean(comparisonPeriod),
-  )
-  const { data: budgets } = useBudgets()
   const { months, gajiCategory, unrecordedPastCount } = usePaydayHistory(PERIOD_HISTORY)
   // Rekening balances are a snapshot in time, not a period-scoped total — so
   // "the balance for Agustus" means the balance as it stood at Agustus's
@@ -116,21 +107,6 @@ export default function Dashboard() {
       incomeSlices: Array.from(incomeByCategory.values()).sort((a, b) => b.value - a.value),
     }
   }, [transactions])
-
-  const insights = useMemo(
-    () =>
-      viewedPeriod && !viewAll && !previousLoading
-        ? buildMoneyInsights({
-            transactions: transactions ?? [],
-            previousTransactions: previousTransactions ?? [],
-            budgets: budgets ?? [],
-            periodStart: viewedPeriod.start,
-            periodEnd: viewedPeriod.end,
-            today: todayISO(),
-          })
-        : [],
-    [budgets, previousLoading, previousTransactions, transactions, viewAll, viewedPeriod],
-  )
 
   const openAdd = useCallback(() => {
     setEditing(undefined)
@@ -283,8 +259,6 @@ export default function Dashboard() {
                 : undefined
             }
           />
-
-          <MoneyInsights insights={insights} />
 
           <AccountBalances
             balances={balances}

@@ -7,14 +7,9 @@ export interface DateRange {
   to?: string // ISO date, inclusive
 }
 
-export function useTransactions(range?: DateRange, enabled = true) {
+export function useTransactions(range?: DateRange) {
   return useQuery({
-    queryKey: [
-      'transactions',
-      enabled ? (range?.from ?? null) : 'disabled',
-      enabled ? (range?.to ?? null) : 'disabled',
-    ],
-    enabled,
+    queryKey: ['transactions', range?.from ?? null, range?.to ?? null],
     queryFn: async (): Promise<TransactionWithCategory[]> => {
       let query = supabase
         .from('transactions')
