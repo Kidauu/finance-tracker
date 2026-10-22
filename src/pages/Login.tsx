@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { ArrowLeft, Lock, Mail, Wallet } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -9,14 +9,18 @@ import { ErrorBanner } from '../components/ui/Feedback'
 
 export default function Login() {
   const { session, loading } = useAuth()
-  const [mode, setMode] = useState<'login' | 'signup' | 'recovery'>('login')
+  const location = useLocation()
+  const recoveryRequested = new URLSearchParams(location.search).get('mode') === 'recovery'
+  const [mode, setMode] = useState<'login' | 'signup' | 'recovery'>(() =>
+    recoveryRequested ? 'recovery' : 'login',
+  )
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  if (!loading && session) {
+  if (!loading && session && mode !== 'recovery' && !recoveryRequested) {
     return <Navigate to="/" replace />
   }
 
