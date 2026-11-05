@@ -17,6 +17,26 @@ const Budgets = lazy(() => import('./pages/Budgets'))
 const Reports = lazy(() => import('./pages/Reports'))
 const AILab = lazy(() => import('./pages/AILab'))
 
+/** An unmatched URL must never leave a blank (black) screen, e.g. a stale cached app shell. */
+function NotFound() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-bg px-6 text-center">
+      <div className="flex max-w-sm flex-col gap-3 rounded-3xl border border-line bg-surface p-6">
+        <h1 className="text-base font-extrabold text-content">Halaman tidak ditemukan</h1>
+        <p className="break-all text-[13px] leading-relaxed text-muted">
+          {window.location.pathname}
+          {window.location.pathname === '/ai-lab' && !LOCAL_AI_ENABLED
+            ? ' — fitur Scan struk nonaktif di versi aplikasi ini (flag mati atau versi lama masih tersimpan).'
+            : ''}
+        </p>
+        <a href="/" className="rounded-2xl bg-ink px-4 py-3 text-sm font-bold text-on-ink">
+          Ke beranda
+        </a>
+      </div>
+    </main>
+  )
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -86,6 +106,7 @@ export default function App() {
                       }
                     />
                   )}
+                  <Route path="*" element={<NotFound />} />
                 </Routes>
               </AppErrorBoundary>
             </Suspense>
