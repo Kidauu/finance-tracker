@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { CalendarDays, ChevronDown, Copy, Pencil, TriangleAlert } from 'lucide-react'
+import { CalendarDays, ChevronDown, Copy, Pencil, ScanLine, TriangleAlert } from 'lucide-react'
 import { useCategories } from '../hooks/useCategories'
 import { useAccountBalances, useAccounts } from '../hooks/useAccounts'
 import { useAddTransaction, useUpdateTransaction } from '../hooks/useTransactions'
@@ -8,6 +8,8 @@ import { Button } from './ui/Button'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { Input, Label, Select } from './ui/Input'
 import { CurrencyInput } from './ui/CurrencyInput'
+import { ReceiptScanModal, type ReceiptDraftResult } from './ReceiptScanModal'
+import { LOCAL_AI_ENABLED } from '../lib/localAi/capability'
 import { formatDateShort, formatIDR, todayISO } from '../lib/format'
 import { CategoryIcon } from '../lib/categoryIcons'
 import { splitCategoriesForPicker } from '../lib/categoryOrder'
@@ -108,6 +110,7 @@ export function TransactionForm({
   const [showAllCategories, setShowAllCategories] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [overdraftConfirmOpen, setOverdraftConfirmOpen] = useState(false)
+  const [scanOpen, setScanOpen] = useState(false)
 
   const isTransfer = type === 'transfer'
   const transferAccountsLocked =
@@ -182,6 +185,18 @@ export function TransactionForm({
     }
   }
 
+  /** Fills the form from a reviewed receipt draft. Nothing is saved here. */
+  function applyReceiptDraft(draft: ReceiptDraftResult) {
+    setType('expense')
+    setToAccountId('')
+    setAmount(draft.amount)
+    setDate(draft.date)
+    setCategoryId(draft.categoryId)
+    setAccountId(draft.accountId)
+    if (draft.description) setDescription(draft.description)
+    setShowAllCategories(true)
+  }
+
   function payloadFor(numericAmount: number): NewTransaction {
     return {
       type,
@@ -248,6 +263,7 @@ export function TransactionForm({
   }
 
   return (
+    <>
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       {prefill?.note && (
         <p className="rounded-2xl bg-accent-soft px-4 py-3 text-[13px] leading-relaxed text-accent">
@@ -269,6 +285,17 @@ export function TransactionForm({
           </button>
         ))}
       </div>
+
+      {LOCAL_AI_ENABLED && !transaction && !isTransfer && type === 'expense' && (
+        <button
+          type="button"
+          onClick={() => setScanOpen(true)}
+          className="flex items-center justify-center gap-2 rounded-2xl border border-dashed border-line-input bg-surface px-4 py-2.5 text-xs font-bold text-accent"
+        >
+          <ScanLine size={15} />
+          Scan struk
+        </button>
+      )}
 
       <CurrencyInput
         id="amount"
@@ -527,5 +554,15 @@ export function TransactionForm({
         onCancel={() => setOverdraftConfirmOpen(false)}
       />
     </form>
+
+    {/* outside the <form>: the shared Modal's close buttons have no type and would submit it */}
+    {LOCAL_AI_ENABLED && (
+      <ReceiptScanModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        onUseDraft={applyReceiptDraft}
+      />
+    )}
+    </>
   )
 }
