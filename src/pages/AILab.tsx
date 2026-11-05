@@ -12,6 +12,27 @@ import { useCategories } from '../hooks/useCategories'
 
 type Engine = typeof import('../lib/localAi/gemmaEngine')
 
+// Diagnostic only: step names (never receipt content). If iOS kills the tab,
+// the next visit reports the last step that started but never finished.
+const CRUMB_KEY = 'ailab-last-step'
+function crumb(step: string | null) {
+  try {
+    if (step) localStorage.setItem(CRUMB_KEY, step)
+    else localStorage.removeItem(CRUMB_KEY)
+  } catch {
+    // storage may be blocked; diagnostics are best effort
+  }
+}
+function takeCrumb(): string | null {
+  try {
+    const v = localStorage.getItem(CRUMB_KEY)
+    localStorage.removeItem(CRUMB_KEY)
+    return v
+  } catch {
+    return null
+  }
+}
+
 interface RunLog {
   at: string
   label: string
@@ -34,6 +55,7 @@ export default function AILab() {
   const [logs, setLogs] = useState<RunLog[]>([])
   const engineRef = useRef<Engine | null>(null)
   const { data: categories } = useCategories()
+  const [lastCrash] = useState<string | null>(() => (LOCAL_AI_ENABLED ? takeCrumb() : null))
 
   const addLog = (entry: Omit<RunLog, 'at'>) =>
     setLogs((prev) => [{ at: new Date().toLocaleTimeString('id-ID'), ...entry }, ...prev].slice(0, 30))
@@ -44,25 +66,45 @@ export default function AILab() {
     return engineRef.current
   }
 
-  async function refreshCapability() {
+  async function checkDevice() {
+    setError(null)
+    crumb('cek perangkat (WebGPU)')
     const next = await checkCapability()
     setCap(next)
-    if (next.modelId) {
-      try {
-        setCached(await (await getEngine()).isModelCached(next.modelId))
-      } catch {
-        setCached(null)
-      }
+    crumb(null)
+    return next
+  }
+
+  async function checkCache(modelId: string) {
+    // this is the first step that imports the ~6MB WebLLM runtime
+    crumb('memuat runtime WebLLM')
+    try {
+      setCached(await (await getEngine()).isModelCached(modelId))
+    } catch (err) {
+      setCached(null)
+      setError('Cek cache gagal: ' + (err instanceof Error ? err.message : String(err)))
     }
+    crumb(null)
+  }
+
+  async function refreshCapability() {
+    const next = await checkDevice()
+    if (next.modelId) await checkCache(next.modelId)
   }
 
   useEffect(() => {
     if (!LOCAL_AI_ENABLED) return
-    void refreshCapability()
+    // surface silent failures on screen instead of a blank page
+    const onError = (e: ErrorEvent) => setError('Error: ' + e.message)
+    const onRejection = (e: PromiseRejectionEvent) =>
+      setError('Promise ditolak: ' + (e.reason instanceof Error ? e.reason.message : String(e.reason)))
+    window.addEventListener('error', onError)
+    window.addEventListener('unhandledrejection', onRejection)
     return () => {
+      window.removeEventListener('error', onError)
+      window.removeEventListener('unhandledrejection', onRejection)
       void engineRef.current?.unloadModel()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -85,8 +127,10 @@ export default function AILab() {
     setError(null)
     setProgress({ progress: 0, text: 'Menyiapkan…' })
     try {
+      crumb('download/muat model')
       const engine = await getEngine()
       const { ms } = await engine.loadModel(cap.modelId, setProgress)
+      crumb(null)
       setLoaded(true)
       addLog({ label: cached ? 'Load model (dari cache)' : 'Download + load model', ms, ok: true })
       await refreshCapability()
@@ -107,9 +151,12 @@ export default function AILab() {
     setParsed('')
     setPreview(URL.createObjectURL(file))
     try {
+      crumb('resize foto')
       const img = await prepareReceiptImage(file)
+      crumb('analisis foto')
       const engine = await getEngine()
       const res = await engine.analyzeReceipt(img.dataUrl)
+      crumb(null)
       setRaw(res.raw)
       const { value, error: parseError } = parseReceiptJson(res.raw)
       if (parseError) setError(parseError)
@@ -162,6 +209,12 @@ export default function AILab() {
         Tidak ada yang disimpan ke Supabase.
       </p>
 
+      {lastCrash && (
+        <p className="rounded-2xl bg-expense-soft p-3 text-xs font-bold text-expense">
+          Sesi sebelumnya berhenti saat: {lastCrash}. Kirim info ini ke Claude.
+        </p>
+      )}
+
       <section className="flex flex-col gap-2 rounded-3xl border border-line bg-surface p-4">
         {row('WebGPU', cap ? (cap.webgpu ? 'ada' : 'tidak ada') : '…')}
         {row('shader-f16', cap ? (cap.shaderF16 ? 'ada' : 'tidak ada') : '…')}
@@ -176,6 +229,17 @@ export default function AILab() {
         {row('Model di cache', cached == null ? '—' : cached ? 'ya' : 'belum')}
         {cap?.reason && <p className="text-xs font-bold text-expense">{cap.reason}</p>}
       </section>
+
+      {!cap && (
+        <Button onClick={() => void checkDevice()} disabled={busy !== null}>
+          1. Cek perangkat
+        </Button>
+      )}
+      {cap?.modelId && cached === null && (
+        <Button variant="secondary" onClick={() => void checkCache(cap.modelId!)} disabled={busy !== null}>
+          2. Cek cache model
+        </Button>
+      )}
 
       {cap && !cap.webgpu ? (
         <p className="text-sm text-muted">
