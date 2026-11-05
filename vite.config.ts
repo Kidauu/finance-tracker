@@ -51,7 +51,10 @@ export default defineConfig({
         // the Excel export bundle (exceljs, ~900KB) is only needed when the
         // user taps "Export Excel" — don't bloat the app-shell precache with
         // it, cache it on first actual use instead
-        globIgnores: ['**/exportExcel-*.js'],
+        //
+        // same for the on-device AI runtime (WebLLM, ~6MB) and its worker: they
+        // must never ride along with the app-shell precache
+        globIgnores: ['**/exportExcel-*.js', '**/lib-*.js', '**/gemmaEngine.worker-*.js'],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.hostname.endsWith('supabase.co'),
@@ -65,6 +68,19 @@ export default defineConfig({
               },
               cacheableResponse: {
                 statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: ({ url }) =>
+              url.pathname.includes('/assets/lib-') ||
+              url.pathname.includes('/assets/gemmaEngine.worker-'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'local-ai-runtime-cache',
+              expiration: {
+                maxEntries: 4,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
               },
             },
           },

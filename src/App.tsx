@@ -7,6 +7,7 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { LoadingBlock } from './components/ui/Feedback'
 import { UpdatePrompt } from './components/UpdatePrompt'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
+import { LOCAL_AI_ENABLED } from './lib/localAi/capability'
 
 const Login = lazy(() => import('./pages/Login'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
@@ -14,6 +15,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Transactions = lazy(() => import('./pages/Transactions'))
 const Budgets = lazy(() => import('./pages/Budgets'))
 const Reports = lazy(() => import('./pages/Reports'))
+const AILab = lazy(() => import('./pages/AILab'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,6 +76,16 @@ export default function App() {
                       </ProtectedRoute>
                     }
                   />
+                  {LOCAL_AI_ENABLED && (
+                    <Route
+                      path="/ai-lab"
+                      element={
+                        <ProtectedRoute>
+                          <AILab />
+                        </ProtectedRoute>
+                      }
+                    />
+                  )}
                 </Routes>
               </AppErrorBoundary>
             </Suspense>
