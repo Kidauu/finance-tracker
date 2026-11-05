@@ -7,6 +7,8 @@ import {
 } from '../lib/localAi/capability'
 import { prepareReceiptImage } from '../lib/localAi/receiptImage'
 import { parseReceiptJson } from '../lib/localAi/receiptPrompt'
+import { validateReceiptDraft } from '../lib/localAi/receiptDraft'
+import { useCategories } from '../hooks/useCategories'
 
 type Engine = typeof import('../lib/localAi/gemmaEngine')
 
@@ -31,6 +33,7 @@ export default function AILab() {
   const [error, setError] = useState<string | null>(null)
   const [logs, setLogs] = useState<RunLog[]>([])
   const engineRef = useRef<Engine | null>(null)
+  const { data: categories } = useCategories()
 
   const addLog = (entry: Omit<RunLog, 'at'>) =>
     setLogs((prev) => [{ at: new Date().toLocaleTimeString('id-ID'), ...entry }, ...prev].slice(0, 30))
@@ -110,7 +113,10 @@ export default function AILab() {
       setRaw(res.raw)
       const { value, error: parseError } = parseReceiptJson(res.raw)
       if (parseError) setError(parseError)
-      else setParsed(JSON.stringify(value, null, 2))
+      else {
+        // show what the app would actually use, after validation
+        setParsed(JSON.stringify(validateReceiptDraft(value, categories ?? []), null, 2))
+      }
       addLog({
         label: `Analisis ${img.width}×${img.height} (${Math.round(img.bytes / 1024)}KB)`,
         ms: res.ms,
