@@ -253,6 +253,7 @@ export default function Dashboard() {
           <SummaryCards
             totalIncome={totalIncome}
             totalExpense={totalExpense}
+            totalBalance={totalBalance}
             periodLabel={
               !viewAll && viewedPeriod
                 ? `${formatDateShort(viewedPeriod.start).replace(/ \d{4}$/, '')} – ${formatDateShort(viewedPeriod.end).replace(/ \d{4}$/, '')}`

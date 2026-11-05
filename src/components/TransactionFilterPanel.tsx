@@ -1,6 +1,7 @@
-import { Check } from 'lucide-react'
+import { CalendarDays, Check } from 'lucide-react'
 import { Button } from './ui/Button'
 import { CategoryIcon, AccountIcon } from '../lib/categoryIcons'
+import { monthStartISO, toLocalISO, todayISO } from '../lib/format'
 import type { Account, Category, CategoryType } from '../types'
 
 interface TransactionFilterPanelProps {
@@ -11,8 +12,11 @@ interface TransactionFilterPanelProps {
   accounts: Account[]
   selectedCategoryIds: Set<string>
   selectedAccountIds: Set<string>
+  from: string
+  to: string
   onToggleCategory: (id: string) => void
   onToggleAccount: (id: string) => void
+  onSetDateRange: (from: string, to: string) => void
   onReset: () => void
   onClose: () => void
 }
@@ -20,6 +24,12 @@ interface TransactionFilterPanelProps {
 const TYPE_GROUP_LABEL: Record<CategoryType, string> = {
   expense: 'Pengeluaran',
   income: 'Pemasukan',
+}
+
+function daysAgoISO(days: number): string {
+  const date = new Date()
+  date.setDate(date.getDate() - days)
+  return toLocalISO(date)
 }
 
 function CategoryChip({
@@ -78,18 +88,73 @@ export function TransactionFilterPanel({
   accounts,
   selectedCategoryIds,
   selectedAccountIds,
+  from,
+  to,
   onToggleCategory,
   onToggleAccount,
+  onSetDateRange,
   onReset,
   onClose,
 }: TransactionFilterPanelProps) {
-  const hasSelection = selectedCategoryIds.size > 0 || selectedAccountIds.size > 0
+  const hasSelection = selectedCategoryIds.size > 0 || selectedAccountIds.size > 0 || Boolean(from || to)
 
   const expenseCategories = categories.filter((c) => c.type === 'expense')
   const incomeCategories = categories.filter((c) => c.type === 'income')
 
   return (
     <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-3">
+        <span className="flex items-center gap-1.5 text-xs font-bold text-label">
+          <CalendarDays size={13} />
+          Tanggal
+        </span>
+        <div className="flex gap-2 overflow-x-auto pb-0.5">
+          <button
+            type="button"
+            onClick={() => onSetDateRange(todayISO(), todayISO())}
+            className="shrink-0 rounded-full bg-surface-alt px-3 py-2 text-xs font-bold text-label"
+          >
+            Hari ini
+          </button>
+          <button
+            type="button"
+            onClick={() => onSetDateRange(daysAgoISO(6), todayISO())}
+            className="shrink-0 rounded-full bg-surface-alt px-3 py-2 text-xs font-bold text-label"
+          >
+            7 hari
+          </button>
+          <button
+            type="button"
+            onClick={() => onSetDateRange(monthStartISO(), todayISO())}
+            className="shrink-0 rounded-full bg-surface-alt px-3 py-2 text-xs font-bold text-label"
+          >
+            Bulan ini
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1.5 text-[11px] font-bold text-muted">
+            Dari
+            <input
+              type="date"
+              value={from}
+              max={to || undefined}
+              onChange={(e) => onSetDateRange(e.target.value, to)}
+              className="w-full rounded-xl border border-line-input bg-bg px-3 py-2 text-xs font-bold text-content outline-none focus:border-accent"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-[11px] font-bold text-muted">
+            Sampai
+            <input
+              type="date"
+              value={to}
+              min={from || undefined}
+              onChange={(e) => onSetDateRange(from, e.target.value)}
+              className="w-full rounded-xl border border-line-input bg-bg px-3 py-2 text-xs font-bold text-content outline-none focus:border-accent"
+            />
+          </label>
+        </div>
+      </div>
+
       {categories.length > 0 ? (
         <div className="flex flex-col gap-3">
           <span className="text-xs font-bold text-label">Kategori</span>

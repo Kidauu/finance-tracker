@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { ArrowDownUp, ListFilter, Search, Tags, X } from 'lucide-react'
+import { ArrowDownUp, CalendarDays, ListFilter, Search, Tags, X } from 'lucide-react'
 import { useTransactions } from '../hooks/useTransactions'
 import { useCategories } from '../hooks/useCategories'
 import { useAccounts } from '../hooks/useAccounts'
@@ -11,7 +11,7 @@ import { TransactionFilterPanel } from '../components/TransactionFilterPanel'
 import { Modal } from '../components/ui/Modal'
 import { IconInput } from '../components/ui/Input'
 import { LoadingBlock, ErrorBanner } from '../components/ui/Feedback'
-import { formatIDR, todayISO } from '../lib/format'
+import { formatDateShort, formatIDR, todayISO } from '../lib/format'
 import { CategoryIcon, AccountIcon } from '../lib/categoryIcons'
 import type { TransactionType, TransactionWithCategory } from '../types'
 
@@ -34,6 +34,8 @@ export default function Transactions() {
   const [query, setQuery] = useState('')
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(new Set())
   const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(new Set())
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
 
   const [formOpen, setFormOpen] = useState(false)
@@ -78,12 +80,31 @@ export default function Transactions() {
   function resetFilters() {
     setSelectedCategoryIds(new Set())
     setSelectedAccountIds(new Set())
+    setFrom('')
+    setTo('')
   }
 
-  const activeFilterCount = selectedCategoryIds.size + selectedAccountIds.size
+  function setDateRange(nextFrom: string, nextTo: string) {
+    setFrom(nextFrom)
+    setTo(nextTo)
+  }
+
+  const hasDateFilter = Boolean(from || to)
+  const activeFilterCount = selectedCategoryIds.size + selectedAccountIds.size + (hasDateFilter ? 1 : 0)
+  const dateFilterLabel = useMemo(() => {
+    if (from && to) {
+      return from === to
+        ? formatDateShort(from)
+        : formatDateShort(from) + ' – ' + formatDateShort(to)
+    }
+    if (from) return 'Dari ' + formatDateShort(from)
+    return 'Sampai ' + formatDateShort(to)
+  }, [from, to])
 
   const visible = useMemo(() => {
     let list = transactions ?? []
+    if (from) list = list.filter((t) => t.transaction_date >= from)
+    if (to) list = list.filter((t) => t.transaction_date <= to)
     if (filter !== 'all') list = list.filter((t) => t.type === filter)
 
     if (selectedCategoryIds.size > 0) {
@@ -107,7 +128,7 @@ export default function Transactions() {
       )
     }
     return sortAsc ? [...list].reverse() : list
-  }, [transactions, sortAsc, filter, query, selectedCategoryIds, selectedAccountIds])
+  }, [transactions, sortAsc, filter, from, to, query, selectedCategoryIds, selectedAccountIds])
 
   const spentThisList = useMemo(
     () => visible.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0),
@@ -219,8 +240,18 @@ export default function Transactions() {
         </button>
       </div>
 
-      {(selectedCategories.length > 0 || selectedAccounts.length > 0) && (
+      {(selectedCategories.length > 0 || selectedAccounts.length > 0 || hasDateFilter) && (
         <div className="flex flex-wrap items-center gap-2">
+          {hasDateFilter && (
+            <button
+              onClick={() => setDateRange('', '')}
+              className="flex items-center gap-1.5 rounded-full bg-surface-alt py-1.5 pl-2.5 pr-2 text-[11px] font-bold text-content"
+            >
+              <CalendarDays size={12} />
+              {dateFilterLabel}
+              <X size={11} className="text-faint" />
+            </button>
+          )}
           {selectedCategories.map((c) => (
             <button
               key={c.id}
@@ -283,8 +314,11 @@ export default function Transactions() {
           accounts={accounts ?? []}
           selectedCategoryIds={selectedCategoryIds}
           selectedAccountIds={selectedAccountIds}
+          from={from}
+          to={to}
           onToggleCategory={toggleCategory}
           onToggleAccount={toggleAccount}
+          onSetDateRange={setDateRange}
           onReset={resetFilters}
           onClose={() => setFiltersOpen(false)}
         />
